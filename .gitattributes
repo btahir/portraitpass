@@ -1,0 +1,2 @@
+# Preserve upstream generated runtime bytes and exclude them from code statistics.
+public/wasm/* -whitespace linguist-vendored

@@ -1,0 +1,51 @@
+{
+  "name": "portraitpass",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 4319",
+    "build": "tsc --noEmit && vite build && tsx scripts/prerender.ts",
+    "preview": "vite preview --host 127.0.0.1 --port 4319",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test tests/core/*.test.ts",
+    "test:e2e": "pnpm build && playwright test",
+    "cli": "tsx src/node/cli.ts",
+    "mcp": "tsx src/node/mcp.ts"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "lucide-react": "^0.468.0",
+    "@fontsource/dm-sans": "^5.2.0",
+    "@fontsource/instrument-serif": "^5.2.0",
+    "sharp": "^0.34.5",
+    "pdf-lib": "^1.17.1",
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "zod": "^3.25.0",
+    "@mediapipe/tasks-vision": "^0.10.32"
+  },
+  "devDependencies": {
+    "vite": "^7.3.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "typescript": "^5.9.3",
+    "tsx": "^4.21.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@playwright/test": "^1.58.0",
+    "@axe-core/playwright": "^4.11.0",
+    "lighthouse": "^13.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "sharp"
+    ]
+  },
+  "packageManager": "pnpm@11.1.1",
+  "engines": {
+    "node": ">=24"
+  }
+}

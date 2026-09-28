@@ -1,0 +1,27 @@
+# PortraitPass
+
+Private, local passport and ID photo preparation. Source-backed printed dimensions, head guides and exact-sized print sheets. No account, upload, watermark or approval guarantee.
+
+## Agent interfaces
+- Core: TypeScript exports from src/core/index.ts.
+- CLI: ./scripts/portraitpass presets --json; ./scripts/portraitpass inspect --input /path/photo.jpg --json.
+- Render: ./scripts/portraitpass render --input /path/photo.jpg --preset us-passport --format png --output /path/photo-sized.png --json.
+- Sheet: ./scripts/portraitpass sheet --input /path/photo.jpg --preset uk-passport --paper 4x6 --format pdf --output /path/sheet.pdf --json.
+- Browser handoff: ./scripts/portraitpass project --input /path/photo.jpg --preset uk-passport --embed --output /path/handoff.portraitpass.json --json.
+- MCP stdio: /absolute/path/to/portraitpass/scripts/portraitpass-mcp after pnpm install. Use the direct wrapper, not package-manager lifecycle commands, to keep stdout clean. Tools: portraitpass_presets, portraitpass_inspect, portraitpass_crop, portraitpass_layout, portraitpass_render, portraitpass_sheet, portraitpass_project.
+- Full schema, examples and safety semantics: docs/agent-guide.md in the repository.
+
+## Presets
+us-passport, uk-passport, au-passport: print preparation only. general-id: custom dimensions and optional persisted alpha-mask background. us-online, uk-online: preserve original bytes; never crop or retouch. Papers: 4x6, a4, letter. Default 300 DPI. All coordinates use oriented source pixels.
+
+## Privacy and limits
+No external calls or keys. Sources: single-frame JPEG/PNG/WebP, at most 20 MiB and 40 megapixels. Portable project version 1: JSON with source data URL, crop, presetId, dpi, paperId, format and background settings. Max project 60 MiB. Outputs require explicit paths, no overwrite by default. Original files are always protected. Exported projects intentionally contain the original photo; share them deliberately.
+
+## Official guidance
+- US print: https://travel.state.gov/en/passports/apply/help/photos.html
+- US online renewal: https://travel.state.gov/en/passports/renew-replace/online/upload-digital-photo.html
+- UK print: https://www.gov.uk/photos-for-passports/photo-requirements
+- UK online: https://www.gov.uk/photos-for-passports
+- Australia: https://www.passports.gov.au/help/passport-photos
+
+Geometric measurements do not certify document acceptance. The person must review likeness, lighting, expression, recency and the destination’s official requirements.

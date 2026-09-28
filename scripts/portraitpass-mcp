@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+portraitpass_script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+portraitpass_root=$(dirname -- "$portraitpass_script_dir")
+exec "$portraitpass_root/node_modules/.bin/tsx" "$portraitpass_root/src/node/mcp.ts" "$@"
