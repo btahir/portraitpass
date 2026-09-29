@@ -38,8 +38,7 @@ The website is the product. The CLI and MCP server are thin extras for AI assist
 
 ## Site and offline
 
-- Tips link to the shared support page https://shotcandy.vercel.app/support/ (SUPPORT_URL in src/config.ts); there is no local /support/ page.
-- Site pages: `/`, `/studio/`, `/documents/`, one page per document, size and print pages, `/about/`, `/privacy/`, `/terms/`, `/accessibility/`, all prerendered with `scripts/prerender.ts`, plus `sitemap.xml`.
+- Site pages: `/`, `/studio/`, `/documents/`, one page per document, size and print pages, `/about/`, `/privacy/`, `/terms/`, `/accessibility/`, `/support/`, all prerendered with `scripts/prerender.ts`, plus `sitemap.xml`.
 - A service worker (`public/sw.js`) and manifest make the site installable and usable offline after the first visit (in progress in this wave; check `src/pwa.ts`). It stores only the site's own files; photos never reach it.
 - The host (Vercel) logs request data; the site sets no cookies and loads no third-party scripts. Fonts and models are self-hosted.
 

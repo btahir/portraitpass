@@ -1,6 +1,6 @@
 import { ArrowRight } from "lucide-react";
 import { DOCUMENTS } from "../../core/documents";
-import { DISCLAIMER, ISSUES_URL, REPO_URL, SUPPORT_URL } from "../../config";
+import { DISCLAIMER, DONATION_LINKS, ISSUES_URL, REPO_URL } from "../../config";
 import { PageShell, Section } from "./parts";
 import { documentsByCountry } from "./DocumentsIndex";
 
@@ -62,9 +62,50 @@ export function AboutPage() {
         </p>
         <p>
           See also the <a href="/terms/">terms</a>, the <a href="/accessibility/">accessibility statement</a>{" "}
-          and <a href={SUPPORT_URL} target="_blank" rel="noreferrer">how to leave a tip</a>.
+          and <a href="/support/">how to leave a tip</a>.
         </p>
       </Section>
+    </PageShell>
+  );
+}
+
+export function SupportPage() {
+  return (
+    <PageShell
+      id="support"
+      eyebrow="Tips are optional"
+      title="Tips keep PortraitPass free."
+      crumbs={[{ label: "Support" }]}
+      lede="PortraitPass is free, private and open source. Every document, every export. If it saved you time or a trip to a photographer, you can leave a tip toward keeping it running."
+    >
+      <div className="support-main">
+        <a className="primary" href={DONATION_LINKS.once} target="_blank" rel="noreferrer">
+          Leave a one-time tip <ArrowRight size={15} className="pg-arrow" aria-hidden="true" />
+        </a>
+      </div>
+      <p>Choose your own amount. Tips are always optional.</p>
+      <div className="pg-tiers">
+        <h2>Monthly tips</h2>
+        <div className="support-tiers">
+          {DONATION_LINKS.monthly.map((tier) => (
+            <a className="support-tier" key={tier.label} href={tier.href} target="_blank" rel="noreferrer">
+              <span>{tier.note}</span>
+              <strong>
+                {tier.label}
+                <small style={{ fontSize: 14 }}> / mo</small>
+              </strong>
+              <span>
+                Tip monthly <ArrowRight size={12} className="pg-arrow" aria-hidden="true" />
+              </span>
+            </a>
+          ))}
+        </div>
+      </div>
+      <p>
+        Tips support the maker’s open-source work. They do not unlock features and have no effect
+        on any photo. Stripe handles payments under its own privacy policy, and your photos never go
+        there. See the <a href="/privacy/">privacy page</a>.
+      </p>
     </PageShell>
   );
 }

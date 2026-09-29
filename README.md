@@ -41,7 +41,7 @@ The site is hosted on Vercel, which, like any host, logs request data such as IP
 
 Photos stay in memory unless you save a project or download an output. A project file contains the photo, settings and head positions (set by you or found by face detection), and the background mask only while background replacement is on. The photo keeps its original metadata, and original-file exports preserve the same bytes, so share project files deliberately.
 
-Site pages: `/privacy/`, `/terms/` (provided as is, no warranty), `/accessibility/`, `/about/`. Tips go to the shared support page at https://shotcandy.vercel.app/support/.
+Site pages: `/privacy/`, `/terms/` (provided as is, no warranty), `/accessibility/`, `/about/`, `/support/`.
 
 ## Run it locally
 
@@ -118,4 +118,4 @@ Code is [MIT](LICENSE). Dependency, model, font and demo-image provenance is in 
 
 The demo portraits are synthetic. Never submit a generated demo photo with an application.
 
-Tips are optional and unlock nothing: [support PortraitPass](https://shotcandy.vercel.app/support/).
+Tips are optional and unlock nothing: [support PortraitPass](https://portraitpass.vercel.app/support/).
