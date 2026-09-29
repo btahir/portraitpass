@@ -7,11 +7,12 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import sharp from 'sharp';
 import { PDFDocument } from 'pdf-lib';
+import { layoutSheet,getPreset } from '../../src/core/index.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 const cli=(args:string[])=>{const result=spawnSync(path.resolve('scripts/portraitpass'),[...args,'--json'],{encoding:'utf8'});return {exit:result.status,data:JSON.parse(result.stdout),stderr:result.stderr};};
-test('CLI actual process: presets, inspect, crop, project handoff, single/sheet, stable failures',async()=>{const dir=await mkdtemp(path.join(tmpdir(),'portraitpass-cli-'));try{const input=path.join(dir,'portrait.jpg');await writeFile(input,await sharp({create:{width:1200,height:1600,channels:3,background:'#8099bb'}}).jpeg().toBuffer());let result=cli(['presets']);assert.equal(result.exit,0);assert.equal(result.data.result.presets.length,6);result=cli(['inspect','--input',input]);assert.equal(result.data.result.width,1200);result=cli(['crop','--input',input,'--preset','uk-passport']);assert(result.data.result.crop.width>0);const project=path.join(dir,'handoff.json');result=cli(['project','--input',input,'--preset','uk-passport','--embed','--output',project]);assert.equal(result.exit,0);assert(JSON.parse(await readFile(project,'utf8')).source.dataUrl.startsWith('data:image/jpeg;base64,'));assert(!JSON.stringify(result.data).includes('base64,'));const output=path.join(dir,'out.jpg');result=cli(['render','--project',project,'--output',output]);assert.equal(result.exit,0);assert.equal((await sharp(await readFile(output)).metadata()).width,413);result=cli(['render','--project',project,'--output',output]);assert.equal(result.exit,4);assert.equal(result.data.error.code,'OUTPUT_EXISTS');result=cli(['sheet','--input',input,'--preset','us-passport','--format','pdf','--output',path.join(dir,'sheet.pdf')]);assert.equal(result.exit,0);assert.equal(result.data.result.count,2);result=cli(['render','--input',input,'--output',input,'--overwrite']);assert.equal(result.exit,4);assert.equal(result.data.error.code,'SOURCE_OVERWRITE');result=cli(['inspect','--input',path.join(dir,'missing.jpg')]);assert.equal(result.exit,3);await writeFile(path.join(dir,'bad.json'),'{}');result=cli(['render','--project',path.join(dir,'bad.json'),'--output',path.join(dir,'bad.jpg')]);assert.equal(result.exit,2);assert.equal(result.data.error.code,'PROJECT_VERSION');}finally{await rm(dir,{recursive:true,force:true});}});
-test('MCP real stdio exposes schemas, renders and hands off without network',async()=>{const dir=await mkdtemp(path.join(tmpdir(),'portraitpass-mcp-'));const transport=new StdioClientTransport({command:path.resolve('scripts/portraitpass-mcp'),args:[],cwd:dir,stderr:'pipe'});const client=new Client({name:'portraitpass-test',version:'1.0.0'});try{const input=path.join(dir,'portrait.png');await writeFile(input,await sharp({create:{width:1200,height:1600,channels:3,background:'#aabbcc'}}).png().toBuffer());await client.connect(transport);const list=await client.listTools();assert.equal(list.tools.length,7);for(const tool of list.tools){assert(tool.inputSchema);assert(tool.outputSchema);}const call=async(name:string,args:Record<string,unknown>)=>{const result=await client.callTool({name,arguments:args});return {isError:result.isError,...JSON.parse((result.content as {text:string}[])[0]!.text)};};let out=await call('portraitpass_presets',{});assert.equal(out.result.presets.length,6);out=await call('portraitpass_inspect',{input});assert.equal(out.result.width,1200);out=await call('portraitpass_crop',{input,presetId:'us-passport'});assert.equal(out.result.crop.height,1200);out=await call('portraitpass_layout',{presetId:'uk-passport',paperId:'4x6'});assert.equal(out.result.placements.length,6);out=await call('portraitpass_render',{input,presetId:'us-passport',output:path.join(dir,'single.png'),format:'png'});assert.equal(out.ok,true);out=await call('portraitpass_sheet',{input,presetId:'uk-passport',paperId:'4x6',output:path.join(dir,'sheet.pdf'),format:'pdf'});assert.equal(out.result.count,6);out=await call('portraitpass_project',{input,presetId:'uk-passport',output:path.join(dir,'project.json')});assert.equal(out.ok,true);out=await call('portraitpass_inspect',{input:path.join(dir,'missing.png')});assert.equal(out.isError,true);assert.equal(out.ok,false);out=await call('portraitpass_render',{input,presetId:'us-passport',output:input,overwrite:true});assert.equal(out.ok,false);}finally{await client.close();await rm(dir,{recursive:true,force:true});}});
+test('CLI actual process: presets, inspect, crop, project handoff, single/sheet, stable failures',async()=>{const dir=await mkdtemp(path.join(tmpdir(),'portraitpass-cli-'));try{const input=path.join(dir,'portrait.jpg');await writeFile(input,await sharp({create:{width:1200,height:1600,channels:3,background:'#8099bb'}}).jpeg().toBuffer());let result=cli(['presets']);assert.equal(result.exit,0);assert.equal(result.data.result.presets.length,6);result=cli(['inspect','--input',input]);assert.equal(result.data.result.width,1200);result=cli(['crop','--input',input,'--preset','uk-passport']);assert(result.data.result.crop.width>0);const project=path.join(dir,'handoff.json');result=cli(['project','--input',input,'--preset','uk-passport','--embed','--output',project]);assert.equal(result.exit,0);assert(JSON.parse(await readFile(project,'utf8')).source.dataUrl.startsWith('data:image/jpeg;base64,'));assert(!JSON.stringify(result.data).includes('base64,'));const output=path.join(dir,'out.jpg');result=cli(['render','--project',project,'--output',output]);assert.equal(result.exit,0);assert.equal((await sharp(await readFile(output)).metadata()).width,413);result=cli(['render','--project',project,'--output',output]);assert.equal(result.exit,4);assert.equal(result.data.error.code,'OUTPUT_EXISTS');result=cli(['sheet','--input',input,'--preset','us-passport','--format','pdf','--output',path.join(dir,'sheet.pdf')]);assert.equal(result.exit,0);assert.equal(result.data.result.count,6);result=cli(['render','--input',input,'--output',input,'--overwrite']);assert.equal(result.exit,4);assert.equal(result.data.error.code,'SOURCE_OVERWRITE');result=cli(['inspect','--input',path.join(dir,'missing.jpg')]);assert.equal(result.exit,3);await writeFile(path.join(dir,'bad.json'),'{}');result=cli(['render','--project',path.join(dir,'bad.json'),'--output',path.join(dir,'bad.jpg')]);assert.equal(result.exit,2);assert.equal(result.data.error.code,'PROJECT_VERSION');}finally{await rm(dir,{recursive:true,force:true});}});
+test('MCP real stdio exposes schemas, renders and hands off without network',async()=>{const dir=await mkdtemp(path.join(tmpdir(),'portraitpass-mcp-'));const transport=new StdioClientTransport({command:path.resolve('scripts/portraitpass-mcp'),args:[],cwd:dir,stderr:'pipe'});const client=new Client({name:'portraitpass-test',version:'1.0.0'});try{const input=path.join(dir,'portrait.png');await writeFile(input,await sharp({create:{width:1200,height:1600,channels:3,background:'#aabbcc'}}).png().toBuffer());await client.connect(transport);const list=await client.listTools();assert.equal(list.tools.length,8);for(const tool of list.tools){assert(tool.inputSchema);assert(tool.outputSchema);}const call=async(name:string,args:Record<string,unknown>)=>{const result=await client.callTool({name,arguments:args});return {isError:result.isError,...JSON.parse((result.content as {text:string}[])[0]!.text)};};let out=await call('portraitpass_presets',{});assert.equal(out.result.presets.length,6);out=await call('portraitpass_inspect',{input});assert.equal(out.result.width,1200);out=await call('portraitpass_crop',{input,presetId:'us-passport'});assert.equal(out.result.crop.height,1200);out=await call('portraitpass_layout',{presetId:'uk-passport',paperId:'4x6'});assert.equal(out.result.placements.length,8);assert.equal(out.result.orientation,'landscape');assert.equal(out.result.style,'edge-to-edge');out=await call('portraitpass_render',{input,presetId:'us-passport',output:path.join(dir,'single.png'),format:'png'});assert.equal(out.ok,true);out=await call('portraitpass_sheet',{input,presetId:'uk-passport',paperId:'4x6',output:path.join(dir,'sheet.pdf'),format:'pdf'});assert.equal(out.result.count,8);out=await call('portraitpass_project',{input,presetId:'uk-passport',output:path.join(dir,'project.json')});assert.equal(out.ok,true);out=await call('portraitpass_inspect',{input:path.join(dir,'missing.png')});assert.equal(out.isError,true);assert.equal(out.ok,false);out=await call('portraitpass_render',{input,presetId:'us-passport',output:input,overwrite:true});assert.equal(out.ok,false);}finally{await client.close();await rm(dir,{recursive:true,force:true});}});
 
 const noisy=(width=1000,height=1300)=>sharp({create:{width,height,channels:3,background:'#808080',noise:{type:'gaussian',mean:128,sigma:40}}}).jpeg({quality:90}).toBuffer();
 const plain=(format:'jpeg'|'png'='jpeg')=>sharp({create:{width:1200,height:1600,channels:3,background:'#8099bb'}})[format]().toBuffer();
@@ -173,9 +174,9 @@ test('MCP: sheet respects the project paper and dpi, relative paths are rejected
     assert(pdf.getSubject()?.includes('not affiliated with any government'));
     out=await call('portraitpass_sheet',{projectPath:project,paperId:'letter',output:path.join(dir,'letter.pdf')});
     pdf=await PDFDocument.load(await readFile(path.join(dir,'letter.pdf')),{updateMetadata:false});
-    assert(Math.abs(pdf.getPage(0).getWidth()-215.9*72/25.4)<1e-6);
+    assert(Math.abs(pdf.getPage(0).getWidth()-layoutSheet(getPreset('uk-passport'),'letter',200).widthMm*72/25.4)<1e-6);
     out=await call('portraitpass_sheet',{input,presetId:'uk-passport',output:path.join(dir,'default.pdf')});
-    assert.equal(out.result.widthMm,101.6);
+    assert.equal(out.result.widthMm,152.4);assert.equal(out.result.layout.orientation,'landscape');
     out=await call('portraitpass_sheet',{projectPath:project,output:path.join(dir,'from-project.pdf')});
     assert.equal(out.error.code,'OUTPUT_EXISTS');
     out=await call('portraitpass_sheet',{projectPath:project,output:project,overwrite:true});
@@ -248,3 +249,72 @@ test('CLI render reports checks and warnings for saved landmarks without blockin
   r=cli(['sheet','--project',project,'--output',path.join(dir,'lm-sheet.pdf')]);
   assert.equal(r.exit,0);assert(Array.isArray(r.data.result.checks));
 }));
+
+const noisyJpeg=(width=2000,height=2000)=>sharp({create:{width,height,channels:3,background:'#808080',noise:{type:'gaussian',mean:128,sigma:50}}}).jpeg({quality:92}).toBuffer();
+test('CLI: --layout and --orientation on layout and sheet, invalid values are INVALID_ARGUMENT-style failures',async()=>{
+  const dir=await mkdtemp(path.join(tmpdir(),'portraitpass-cli-layout-'));
+  try{
+    const input=path.join(dir,'p.jpg');await writeFile(input,await sharp({create:{width:1200,height:1600,channels:3,background:'#8099bb'}}).jpeg().toBuffer());
+    let r=cli(['layout','--preset','uk-passport','--paper','4x6']);assert.equal(r.data.result.placements.length,8);assert.equal(r.data.result.orientation,'landscape');
+    r=cli(['layout','--preset','uk-passport','--paper','4x6','--layout','cut-marks']);assert.equal(r.data.result.placements.length,6);assert.equal(r.data.result.style,'cut-marks');
+    r=cli(['layout','--preset','uk-passport','--paper','4x6','--orientation','portrait']);assert.equal(r.data.result.placements.length,6);assert.equal(r.data.result.orientation,'portrait');
+    r=cli(['layout','--preset','uk-passport','--paper','letter']);assert.equal(r.data.result.placements.length,28);assert.equal(r.data.result.style,'cut-marks');
+    r=cli(['layout','--preset','uk-passport','--paper','letter','--layout','edge-to-edge']);assert.equal(r.data.result.placements.length,36);
+    r=cli(['layout','--preset','uk-passport','--layout','fancy']);assert.equal(r.exit,2);assert.equal(r.data.error.code,'INVALID_SHEET_STYLE');
+    r=cli(['layout','--preset','uk-passport','--orientation','sideways']);assert.equal(r.exit,2);assert.equal(r.data.error.code,'INVALID_SHEET_ORIENTATION');
+    // The PDF page follows the resolved orientation.
+    r=cli(['sheet','--input',input,'--preset','uk-passport','--paper','4x6','--output',path.join(dir,'e.pdf')]);assert.equal(r.exit,0,JSON.stringify(r.data));assert.equal(r.data.result.count,8);assert.equal(r.data.result.layout.orientation,'landscape');
+    let pdf=await PDFDocument.load(await readFile(path.join(dir,'e.pdf')),{updateMetadata:false});assert(Math.abs(pdf.getPage(0).getWidth()-152.4*72/25.4)<1e-6);assert(Math.abs(pdf.getPage(0).getHeight()-101.6*72/25.4)<1e-6);
+    r=cli(['sheet','--input',input,'--preset','uk-passport','--paper','4x6','--layout','cut-marks','--orientation','portrait','--output',path.join(dir,'c.pdf')]);assert.equal(r.data.result.count,6);
+    pdf=await PDFDocument.load(await readFile(path.join(dir,'c.pdf')),{updateMetadata:false});assert(Math.abs(pdf.getPage(0).getWidth()-101.6*72/25.4)<1e-6);
+    // Raster sheet: pixels follow the oriented layout.
+    r=cli(['sheet','--input',input,'--preset','uk-passport','--paper','4x6','--output',path.join(dir,'e.png')]);assert.equal(r.exit,0);const meta=await sharp(path.join(dir,'e.png')).metadata();assert.equal(meta.width,1800);assert.equal(meta.height,1200);
+    r=cli(['sheet','--input',input,'--preset','uk-passport','--layout','bogus','--output',path.join(dir,'z.pdf')]);assert.equal(r.exit,2);
+  }finally{await rm(dir,{recursive:true,force:true});}
+});
+test('CLI digital: DV lottery 600x600 under 240 KB, SSC-like 20-50 KB, padding, unreachable, no upscaling',async()=>{
+  const dir=await mkdtemp(path.join(tmpdir(),'portraitpass-cli-digital-'));
+  try{
+    const input=path.join(dir,'p.jpg');await writeFile(input,await noisyJpeg());
+    let r=cli(['digital','--input',input,'--preset','us-passport','--width','600','--height','600','--max-kb','240','--kb-bytes','1000','--output',path.join(dir,'dv.jpg')]);
+    assert.equal(r.exit,0,JSON.stringify(r.data));
+    const dv=await readFile(path.join(dir,'dv.jpg'));const m=await sharp(dv).metadata();
+    assert.equal(m.width,600);assert.equal(m.height,600);assert.equal(m.format,'jpeg');assert(dv.length<=240_000,String(dv.length));assert.equal(r.data.result.bytes,dv.length);assert.equal(r.data.result.padded,false);assert(r.data.result.quality>=0.3);
+    assert(Array.isArray(r.data.result.checks)&&Array.isArray(r.data.result.warnings)&&Array.isArray(r.data.result.fileChecks));
+    // A different shape from the preset: the crop is derived from the target, and measurements are skipped with a warning.
+    r=cli(['digital','--input',input,'--preset','general-id','--width','200','--height','230','--min-kb','20','--max-kb','50','--output',path.join(dir,'ssc.jpg')]);
+    assert.equal(r.exit,0,JSON.stringify(r.data));const ssc=await readFile(path.join(dir,'ssc.jpg'));const sm=await sharp(ssc).metadata();
+    assert.equal(sm.width,200);assert.equal(sm.height,230);assert(ssc.length>=20*1024&&ssc.length<=50*1024,String(ssc.length));
+    // Unreachable: a huge noisy target under a tiny cap.
+    r=cli(['digital','--input',input,'--preset','us-passport','--width','1200','--height','1200','--max-kb','20','--output',path.join(dir,'no.jpg')]);assert.equal(r.exit,2);assert.equal(r.data.error.code,'FILE_SIZE_UNREACHABLE');assert.match(r.data.error.message,/smaller pixel size/);
+    // Never enlarges.
+    r=cli(['digital','--input',input,'--preset','us-passport','--width','2400','--height','2400','--max-kb','900','--output',path.join(dir,'up.jpg')]);assert.equal(r.exit,2);assert.equal(r.data.error.code,'LOW_RESOLUTION');
+    r=cli(['digital','--input',input,'--preset','us-passport','--width','600','--height','600','--max-kb','nope','--output',path.join(dir,'x.jpg')]);assert.equal(r.exit,2);assert.equal(r.data.error.code,'INVALID_DIGITAL_TARGET');
+    r=cli(['digital','--input',input,'--preset','us-passport','--width','600','--output',path.join(dir,'x.jpg')]);assert.equal(r.exit,2);assert.equal(r.data.error.code,'ARGUMENT_REQUIRED');
+    r=cli(['digital','--input',input,'--preset','us-passport','--width','600','--height','600','--max-kb','240','--output',path.join(dir,'x.png')]);assert.equal(r.exit,2);assert.equal(r.data.error.code,'FORMAT_EXTENSION_MISMATCH');
+    r=cli(['digital','--input',input,'--preset','us-online','--width','600','--height','600','--output',path.join(dir,'o.jpg')]);assert.equal(r.exit,2);assert.equal(r.data.error.code,'ORIGINAL_ONLY');
+    r=cli(['digital','--input',input,'--preset','us-passport','--width','600','--height','600','--max-kb','240','--output',path.join(dir,'dv.jpg')]);assert.equal(r.exit,4);assert.equal(r.data.error.code,'OUTPUT_EXISTS');
+  }finally{await rm(dir,{recursive:true,force:true});}
+});
+test('MCP digital tool and sheet style/orientation parameters',async()=>{
+  const dir=await mkdtemp(path.join(tmpdir(),'portraitpass-mcp-digital-'));
+  const transport=new StdioClientTransport({command:path.resolve('scripts/portraitpass-mcp'),args:[],cwd:dir,stderr:'pipe'});
+  const client=new Client({name:'portraitpass-test',version:'1.0.0'});
+  try{
+    const input=path.join(dir,'p.jpg');await writeFile(input,await noisyJpeg());
+    await client.connect(transport);
+    const list=await client.listTools();
+    const digital=list.tools.find(t=>t.name==='portraitpass_digital')!;assert(digital);assert.match(JSON.stringify(digital),/absolute/i);
+    const props=(digital.inputSchema as {properties:Record<string,{default?:unknown}>}).properties;for(const k of ['minKB','maxKB','kbBytes','crop','overwrite'])assert.equal(props[k]?.default,undefined,k);
+    const sheetProps=(list.tools.find(t=>t.name==='portraitpass_sheet')!.inputSchema as {properties:Record<string,{default?:unknown}>}).properties;for(const k of ['sheetStyle','sheetOrientation']){assert(sheetProps[k],k);assert.equal(sheetProps[k]!.default,undefined,k);}
+    const call=async(name:string,args:Record<string,unknown>)=>{const result=await client.callTool({name,arguments:args});return {isError:result.isError,...JSON.parse((result.content as {text:string}[])[0]!.text)};};
+    let out=await call('portraitpass_digital',{input,presetId:'us-passport',widthPx:600,heightPx:600,maxKB:240,kbBytes:1000,output:path.join(dir,'dv.jpg')});
+    assert.equal(out.ok,true,JSON.stringify(out));assert(out.result.bytes<=240_000);assert.equal(out.result.width,600);assert.equal(typeof out.result.quality,'number');assert.equal(out.result.padded,false);
+    const meta=await sharp(await readFile(path.join(dir,'dv.jpg'))).metadata();assert.equal(meta.width,600);assert.equal(meta.height,600);
+    out=await call('portraitpass_digital',{input,presetId:'us-passport',widthPx:600,heightPx:600,output:'rel.jpg'});assert.equal(out.error.code,'PATH_NOT_ABSOLUTE');
+    out=await call('portraitpass_digital',{input,presetId:'us-passport',widthPx:1200,heightPx:1200,maxKB:20,output:path.join(dir,'no.jpg')});assert.equal(out.error.code,'FILE_SIZE_UNREACHABLE');assert.equal(out.isError,true);
+    out=await call('portraitpass_sheet',{input,presetId:'uk-passport',paperId:'4x6',sheetStyle:'cut-marks',sheetOrientation:'portrait',output:path.join(dir,'s.pdf')});assert.equal(out.result.count,6);assert.equal(out.result.layout.style,'cut-marks');assert.equal(out.result.widthMm,101.6);
+    out=await call('portraitpass_layout',{presetId:'us-passport',paperId:'4x6'});assert.equal(out.result.placements.length,6);
+    out=await call('portraitpass_layout',{presetId:'uk-passport',paperId:'letter',sheetStyle:'edge-to-edge'});assert.equal(out.result.placements.length,36);assert.equal(out.result.orientation,'portrait');
+  }finally{await client.close();await rm(dir,{recursive:true,force:true});}
+});

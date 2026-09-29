@@ -72,6 +72,19 @@ export function validateProject(value: unknown): {
   const p = value as Project;
   if (p.outputKind !== undefined && !["single", "sheet"].includes(p.outputKind))
     fail("INVALID_OUTPUT_KIND", "Output kind must be single or sheet.");
+  if (
+    p.sheetStyle !== undefined &&
+    !["cut-marks", "edge-to-edge"].includes(p.sheetStyle)
+  )
+    fail("INVALID_SHEET_STYLE", "Sheet style must be cut-marks or edge-to-edge.");
+  if (
+    p.sheetOrientation !== undefined &&
+    !["auto", "portrait", "landscape"].includes(p.sheetOrientation)
+  )
+    fail(
+      "INVALID_SHEET_ORIENTATION",
+      "Sheet orientation must be auto, portrait or landscape.",
+    );
   if (p.version !== 1)
     fail(
       "PROJECT_VERSION",
@@ -279,6 +292,10 @@ export function validateProject(value: unknown): {
         ? { maskDataUrl: p.background.maskDataUrl }
         : {}),
     },
+    ...(p.sheetStyle !== undefined ? { sheetStyle: p.sheetStyle } : {}),
+    ...(p.sheetOrientation !== undefined
+      ? { sheetOrientation: p.sheetOrientation }
+      : {}),
     ...(p.customSize !== undefined
       ? {
           customSize: {

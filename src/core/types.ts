@@ -79,6 +79,30 @@ export interface Project {
   format: OutputFormat;
   background: Background;
   customSize?: { widthMm: number; heightMm: number };
+  /** Sheet layout style. Omitted means the default for the paper (edge-to-edge on 4x6, cut marks otherwise). */
+  sheetStyle?: SheetStyle;
+  /** Sheet paper orientation. Omitted means "auto" (whichever fits more photos). */
+  sheetOrientation?: SheetOrientation;
+}
+/**
+ * "cut-marks": 3 mm margins and gaps with corner marks outside every photo (home printer).
+ * "edge-to-edge": photos tile the paper with no margins or gaps and thin guides on shared edges (photo-lab print).
+ */
+export type SheetStyle = "cut-marks" | "edge-to-edge";
+export type SheetOrientation = "auto" | "portrait" | "landscape";
+export interface SheetOptions {
+  style?: SheetStyle;
+  orientation?: SheetOrientation;
+}
+/** Exact digital export: pixel size plus an optional file-size range, JPEG only. */
+export interface DigitalTarget {
+  widthPx: number;
+  heightPx: number;
+  minKB?: number;
+  maxKB?: number;
+  /** Bytes in one "KB" for the min/max: 1024 (default) or 1000. */
+  kbBytes?: 1000 | 1024;
+  format: "jpeg";
 }
 export interface CutMark {
   x1: number;
@@ -96,6 +120,10 @@ export interface SheetLayout {
   cutMarks: CutMark[];
   columns: number;
   rows: number;
+  /** Resolved paper orientation. width/height/widthMm/heightMm already describe the oriented page. */
+  orientation: "portrait" | "landscape";
+  /** Resolved style. Edge-to-edge marks are thin guides on shared edges; cut-marks are corner marks. */
+  style: SheetStyle;
 }
 export interface Issue {
   code: string;

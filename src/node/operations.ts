@@ -17,6 +17,7 @@ import {
   MAX_SOURCE_PIXELS,
   PortraitError,
   createProject,
+  defaultCrop,
   getPreset,
   projectPreset,
   validateProject,
@@ -27,8 +28,13 @@ import {
   measurementChecks,
   originalIssues,
   mmToPoints,
+  digitalTargetBytes,
+  fitToFileSize,
+  MIN_JPEG_QUALITY,
+  MAX_JPEG_QUALITY,
   INDEPENDENCE_NOTE,
   BACKGROUND_NOTE,
+  type DigitalTarget,
   type Issue,
   type Preset,
   type Project,
@@ -430,6 +436,53 @@ const xmlEscape = (text: string) =>
 function backgroundXmp(preset: Preset) {
   return `<?xpacket begin="\uFEFF" id="W5M0MpCehiHzreSzNTczkc9d"?><x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:xmp="http://ns.adobe.com/xap/1.0/"><dc:description><rdf:Alt><rdf:li xml:lang="x-default">${xmlEscape(`${BACKGROUND_NOTE} (${preset.id})`)}</rdf:li></rdf:Alt></dc:description><xmp:CreatorTool>PortraitPass</xmp:CreatorTool></rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end="w"?>`;
 }
+/** Replace the background using the project's saved mask; returns opaque PNG bytes at oriented source size. */
+async function applyBackground(
+  bytes: Buffer,
+  project: Project,
+  decoded: { width: number; height: number },
+): Promise<Buffer> {
+  if (!project.background.maskDataUrl)
+    throw new PortraitError(
+      "MASK_REQUIRED",
+      "Background replacement needs a saved segmentation mask from the browser.",
+    );
+  const maskBytes = Buffer.from(
+    project.background.maskDataUrl.split(",")[1] ?? "",
+    "base64",
+  );
+  let maskMeta: sharp.Metadata;
+  try {
+    maskMeta = await sharp(maskBytes, {
+      limitInputPixels: MAX_SOURCE_PIXELS,
+    }).metadata();
+  } catch {
+    throw new PortraitError("INVALID_MASK", "Mask could not be decoded.");
+  }
+  if (
+    maskMeta.format !== "png" ||
+    maskMeta.width !== decoded.width ||
+    maskMeta.height !== decoded.height ||
+    !maskMeta.hasAlpha
+  )
+    throw new PortraitError(
+      "INVALID_MASK",
+      "Mask must be a PNG with alpha at the oriented source dimensions.",
+    );
+  const oriented = await sharp(bytes, { limitInputPixels: MAX_SOURCE_PIXELS })
+    .rotate()
+    .ensureAlpha()
+    .png()
+    .toBuffer();
+  const masked = await sharp(oriented)
+    .composite([{ input: maskBytes, blend: "dest-in" }])
+    .png()
+    .toBuffer();
+  return sharp(masked)
+    .flatten({ background: project.background.color })
+    .png()
+    .toBuffer();
+}
 export async function renderBuffer(
   bytes: Buffer,
   project: Project,
@@ -516,48 +569,8 @@ export async function renderBuffer(
       .filter((c) => c.status === "fail" && c.id !== "resolution")
       .map((c) => c.message),
   ];
-  if (project.background.enabled) {
-    if (!project.background.maskDataUrl)
-      throw new PortraitError(
-        "MASK_REQUIRED",
-        "Background replacement needs a saved segmentation mask from the browser.",
-      );
-    const maskBytes = Buffer.from(
-      project.background.maskDataUrl.split(",")[1] ?? "",
-      "base64",
-    );
-    let maskMeta: sharp.Metadata;
-    try {
-      maskMeta = await sharp(maskBytes, {
-        limitInputPixels: MAX_SOURCE_PIXELS,
-      }).metadata();
-    } catch {
-      throw new PortraitError("INVALID_MASK", "Mask could not be decoded.");
-    }
-    if (
-      maskMeta.format !== "png" ||
-      maskMeta.width !== decoded.width ||
-      maskMeta.height !== decoded.height ||
-      !maskMeta.hasAlpha
-    )
-      throw new PortraitError(
-        "INVALID_MASK",
-        "Mask must be a PNG with alpha at the oriented source dimensions.",
-      );
-    const oriented = await sharp(bytes, { limitInputPixels: MAX_SOURCE_PIXELS })
-      .rotate()
-      .ensureAlpha()
-      .png()
-      .toBuffer();
-    const masked = await sharp(oriented)
-      .composite([{ input: maskBytes, blend: "dest-in" }])
-      .png()
-      .toBuffer();
-    renderSource = await sharp(masked)
-      .flatten({ background: project.background.color })
-      .png()
-      .toBuffer();
-  }
+  if (project.background.enabled)
+    renderSource = await applyBackground(bytes, project, decoded);
   const size = outputSize(preset, project.dpi);
   const c = project.crop;
   const x = Math.floor(c.x),
@@ -589,7 +602,10 @@ export async function renderBuffer(
     .png()
     .toBuffer();
   const layout = sheet
-    ? layoutSheet(preset, project.paperId, project.dpi)
+    ? layoutSheet(preset, project.paperId, project.dpi, {
+        style: project.sheetStyle,
+        orientation: project.sheetOrientation,
+      })
     : undefined;
   if (project.format === "pdf") {
     const pdf = await PDFDocument.create();
@@ -607,24 +623,24 @@ export async function renderBuffer(
       heightMm = layout?.heightMm ?? preset.heightMm;
     const page = pdf.addPage([mmToPoints(widthMm), mmToPoints(heightMm)]),
       image = await pdf.embedPng(opaquePhoto);
-    const toPoints = (px: number) => (px * 72) / project.dpi;
     if (layout) {
-      for (const p of layout.placements)
+      const { placements, marks } = core.sheetMm(layout, preset);
+      for (const p of placements)
         page.drawImage(image, {
-          x: toPoints(p.x),
-          y: mmToPoints(heightMm) - toPoints(p.y) - mmToPoints(preset.heightMm),
-          width: mmToPoints(preset.widthMm),
-          height: mmToPoints(preset.heightMm),
+          x: mmToPoints(p.x),
+          y: mmToPoints(heightMm - p.y - p.height),
+          width: mmToPoints(p.width),
+          height: mmToPoints(p.height),
         });
-      for (const m of layout.cutMarks)
+      for (const m of marks)
         page.drawLine({
-          start: {
-            x: toPoints(m.x1),
-            y: mmToPoints(heightMm) - toPoints(m.y1),
-          },
-          end: { x: toPoints(m.x2), y: mmToPoints(heightMm) - toPoints(m.y2) },
-          thickness: 0.25,
-          color: rgb(0.4, 0.4, 0.4),
+          start: { x: mmToPoints(m.x1), y: mmToPoints(heightMm - m.y1) },
+          end: { x: mmToPoints(m.x2), y: mmToPoints(heightMm - m.y2) },
+          thickness: layout.style === "edge-to-edge" ? 0.2 : 0.25,
+          color:
+            layout.style === "edge-to-edge"
+              ? rgb(0.78, 0.78, 0.78)
+              : rgb(0.4, 0.4, 0.4),
         });
     } else
       page.drawImage(image, {
@@ -649,7 +665,7 @@ export async function renderBuffer(
   }
   let pipeline = sharp(opaquePhoto);
   if (layout) {
-    const marks = `<svg width="${layout.width}" height="${layout.height}"><g stroke="#777" stroke-width="1">${layout.cutMarks.map((m) => `<line x1="${m.x1}" y1="${m.y1}" x2="${m.x2}" y2="${m.y2}"/>`).join("")}</g></svg>`;
+    const marks = `<svg width="${layout.width}" height="${layout.height}"><g stroke="${layout.style === "edge-to-edge" ? "#c8c8c8" : "#777"}" stroke-width="1">${layout.cutMarks.map((m) => `<line x1="${m.x1}" y1="${m.y1}" x2="${m.x2}" y2="${m.y2}"/>`).join("")}</g></svg>`;
     pipeline = sharp({
       create: {
         width: layout.width,
@@ -778,6 +794,8 @@ export async function renderFile(args: {
   crop?: Project["crop"];
   overwrite?: boolean;
   sheet?: boolean;
+  sheetStyle?: Project["sheetStyle"];
+  sheetOrientation?: Project["sheetOrientation"];
 }) {
   let project = args.projectPath
     ? await loadProject(args.projectPath)
@@ -801,12 +819,269 @@ export async function renderFile(args: {
   if (args.paperId) project.paperId = args.paperId;
   if (args.dpi !== undefined) project.dpi = args.dpi;
   if (args.crop) project.crop = args.crop;
+  if (args.sheetStyle) project.sheetStyle = args.sheetStyle;
+  if (args.sheetOrientation) project.sheetOrientation = args.sheetOrientation;
   const bytes = await sourceForProject(project, args.input);
   const rendered = await renderBuffer(
     bytes,
     project,
     args.sheet ?? project.outputKind === "sheet",
   );
+  const output = await saveFile(args.output, rendered.bytes, args.overwrite, [
+    args.input,
+    args.projectPath,
+  ]);
+  return { output, byteLength: rendered.bytes.length, ...rendered.details };
+}
+
+const ASPECT_TOLERANCE = 0.005;
+const relDiff = (a: number, b: number) => Math.abs(a - b) / b;
+/** Largest crop of the given aspect, centred inside `crop`, in whole pixels. */
+function centredCropOf(crop: Project["crop"], aspect: number): Project["crop"] {
+  let width = Math.min(crop.width, crop.height * aspect);
+  let height = width / aspect;
+  width = Math.floor(width);
+  height = Math.floor(width / aspect);
+  return {
+    x: Math.round(crop.x + (crop.width - width) / 2),
+    y: Math.round(crop.y + (crop.height - height) / 2),
+    width,
+    height,
+  };
+}
+const kbText = (bytes: number, kbBytes: number) =>
+  `${(bytes / kbBytes).toFixed(1)} KB`;
+export interface DigitalCheck {
+  id: "pixels" | "filesize";
+  status: "pass" | "fail";
+  message: string;
+}
+/**
+ * Exact digital export: crop, downscale to the target pixels (never enlarge) and search JPEG quality
+ * for the file-size range. Digital originals are never re-encoded.
+ */
+export async function renderDigitalBuffer(
+  bytes: Buffer,
+  project: Project,
+  target: DigitalTarget,
+): Promise<{ bytes: Buffer; details: Record<string, unknown> }> {
+  assertHeifAllowed(project.source.mime, project.presetId);
+  const limits = digitalTargetBytes(target);
+  const kbBytes = target.kbBytes ?? 1024;
+  // The crop is checked below against the target's shape, not the preset's, so validate the rest here.
+  const validation = validateProject({
+    ...project,
+    format: "jpeg",
+    crop: defaultCrop(
+      project.source.width,
+      project.source.height,
+      projectPreset(project),
+    ),
+  });
+  if (validation.issues.length)
+    throw new PortraitError(
+      validation.issues[0]!.code,
+      validation.issues.map((i) => i.message).join(" "),
+    );
+  const decoded = await inspectBytes(bytes);
+  if (
+    decoded.width !== project.source.width ||
+    decoded.height !== project.source.height ||
+    decoded.mime !== project.source.mime
+  )
+    throw new PortraitError(
+      "SOURCE_MISMATCH",
+      "Source metadata does not match decoded pixels.",
+    );
+  const preset = projectPreset(project);
+  if (preset.mode === "original")
+    throw new PortraitError(
+      "ORIGINAL_ONLY",
+      "Digital originals are exported unchanged and are never resized or re-encoded. Use a print preset such as us-passport or general-id for exact digital sizing.",
+    );
+  const crop = project.crop;
+  if (
+    crop.x < 0 ||
+    crop.y < 0 ||
+    crop.width <= 0 ||
+    crop.height <= 0 ||
+    crop.x + crop.width > decoded.width + 0.001 ||
+    crop.y + crop.height > decoded.height + 0.001
+  )
+    throw new PortraitError(
+      "INVALID_CROP",
+      "Crop must remain inside the source photo.",
+    );
+  const targetAspect = target.widthPx / target.heightPx;
+  if (relDiff(crop.width / crop.height, targetAspect) > ASPECT_TOLERANCE) {
+    const s = centredCropOf(crop, targetAspect);
+    throw new PortraitError(
+      "ASPECT_MISMATCH",
+      `The crop is not the same shape as ${target.widthPx} × ${target.heightPx}. A centred crop of that shape is ${JSON.stringify(s)}; pass it as the crop.`,
+    );
+  }
+  if (
+    crop.width + 0.01 < target.widthPx ||
+    crop.height + 0.01 < target.heightPx
+  )
+    throw new PortraitError(
+      "LOW_RESOLUTION",
+      `The crop holds ${Math.floor(crop.width)} × ${Math.floor(crop.height)} pixels and ${target.widthPx} × ${target.heightPx} were asked for. Photos are never enlarged: choose a smaller size or a source with more pixels.`,
+    );
+  // Head and eye ranges are in millimetres of the printed photo, so they only carry over when the
+  // pixel shape matches the preset's shape.
+  const sameShape =
+    relDiff(targetAspect, preset.widthMm / preset.heightMm) <= ASPECT_TOLERANCE;
+  const checks = sameShape
+    ? measurementChecks(preset, crop, project.landmarks, decoded, project.dpi).filter(
+        (c) => c.id !== "resolution",
+      )
+    : [];
+  const replaced = project.background.enabled;
+  const renderSource = replaced
+    ? await applyBackground(bytes, project, decoded)
+    : bytes;
+  const x = Math.floor(crop.x),
+    y = Math.floor(crop.y),
+    w = Math.min(decoded.width - x, Math.ceil(crop.width)),
+    h = Math.min(decoded.height - y, Math.ceil(crop.height));
+  const flat = await sharp(renderSource, { limitInputPixels: MAX_SOURCE_PIXELS })
+    .rotate()
+    .extract({ left: x, top: y, width: w, height: h })
+    .resize(target.widthPx, target.heightPx, {
+      fit: "fill",
+      kernel: "lanczos3",
+    })
+    .flatten({ background: "#ffffff" })
+    .png()
+    .toBuffer();
+  const encode = async (quality: number) => {
+    let pipeline = sharp(flat).jpeg({ quality: Math.round(quality * 100) });
+    if (replaced) pipeline = pipeline.withXmp(backgroundXmp(preset));
+    return new Uint8Array(await pipeline.toBuffer());
+  };
+  const fit = await fitToFileSize(encode, limits, {
+    minQuality: MIN_JPEG_QUALITY,
+    maxQuality: MAX_JPEG_QUALITY,
+    maxIterations: 8,
+  });
+  const out = Buffer.from(fit.bytes);
+  const warnings: string[] = [
+    ...(replaced && preset.backgroundEdit === "forbidden"
+      ? [backgroundWarning(preset)]
+      : []),
+    ...checks.filter((c) => c.status === "fail").map((c) => c.message),
+    ...(sameShape
+      ? []
+      : [
+          "Head and eye measurements are skipped: this pixel shape differs from the document's photo shape.",
+        ]),
+    ...(fit.padded
+      ? [
+          `The file was padded with ${fit.paddedBytes} bytes of JPEG comment to reach the ${kbText(limits.minBytes!, kbBytes)} minimum. The pixels are unchanged.`,
+        ]
+      : []),
+  ];
+  const range = [
+    limits.minBytes !== undefined
+      ? `at least ${kbText(limits.minBytes, kbBytes)}`
+      : "",
+    limits.maxBytes !== undefined
+      ? `at most ${kbText(limits.maxBytes, kbBytes)}`
+      : "",
+  ]
+    .filter(Boolean)
+    .join(" and ");
+  const fileChecks: DigitalCheck[] = [
+    {
+      id: "pixels",
+      status: "pass",
+      message: `The file is ${target.widthPx} × ${target.heightPx} pixels, cut from a ${Math.floor(crop.width)} × ${Math.floor(crop.height)} pixel crop.`,
+    },
+    {
+      id: "filesize",
+      status: "pass",
+      message: `The file is ${kbText(out.length, kbBytes)} (1 KB = ${kbBytes} bytes)${range ? `; asked for ${range}` : ""}.`,
+    },
+  ];
+  return {
+    bytes: out,
+    details: {
+      format: "jpeg",
+      width: target.widthPx,
+      height: target.heightPx,
+      bytes: out.length,
+      kb: Math.round((out.length / kbBytes) * 10) / 10,
+      kbBytes,
+      minBytes: limits.minBytes,
+      maxBytes: limits.maxBytes,
+      quality: fit.quality,
+      padded: fit.padded,
+      paddedBytes: fit.paddedBytes,
+      encodes: fit.iterations,
+      backgroundReplaced: replaced,
+      checks,
+      fileChecks,
+      warnings,
+    },
+  };
+}
+export async function renderDigital(args: {
+  input?: string;
+  projectPath?: string;
+  presetId?: string;
+  output: string;
+  widthPx: number;
+  heightPx: number;
+  minKB?: number;
+  maxKB?: number;
+  kbBytes?: 1000 | 1024;
+  crop?: Project["crop"];
+  overwrite?: boolean;
+}) {
+  const target: DigitalTarget = {
+    widthPx: args.widthPx,
+    heightPx: args.heightPx,
+    ...(args.minKB !== undefined ? { minKB: args.minKB } : {}),
+    ...(args.maxKB !== undefined ? { maxKB: args.maxKB } : {}),
+    ...(args.kbBytes !== undefined ? { kbBytes: args.kbBytes } : {}),
+    format: "jpeg",
+  };
+  digitalTargetBytes(target);
+  const project = args.projectPath
+    ? await loadProject(args.projectPath)
+    : args.input
+      ? await prepareProject(args.input, args.presetId)
+      : undefined;
+  if (!project)
+    throw new PortraitError("SOURCE_REQUIRED", "Provide --input or --project.");
+  if (args.projectPath && args.presetId && args.presetId !== project.presetId)
+    throw new PortraitError(
+      "PRESET_PROJECT_CONFLICT",
+      `--preset ${args.presetId} conflicts with the project's preset ${project.presetId}. Drop --preset or save a new project for that document.`,
+    );
+  const ext = path.extname(args.output).toLowerCase();
+  if (
+    ext &&
+    (Object.keys(OUTPUT_EXT_FORMAT).includes(ext) ||
+      UNSUPPORTED_OUTPUT_EXT.has(ext)) &&
+    ![".jpg", ".jpeg"].includes(ext)
+  )
+    throw extensionMismatch(ext, "is not JPEG. Digital export writes .jpg or .jpeg.");
+  project.format = "jpeg";
+  if (args.crop) project.crop = args.crop;
+  else if (
+    !args.projectPath &&
+    relDiff(project.crop.width / project.crop.height, target.widthPx / target.heightPx) >
+      ASPECT_TOLERANCE
+  )
+    // A fresh project carries the preset's default crop; give it the target's shape instead.
+    project.crop = centredCropOf(
+      { x: 0, y: 0, width: project.source.width, height: project.source.height },
+      target.widthPx / target.heightPx,
+    );
+  const bytes = await sourceForProject(project, args.input);
+  const rendered = await renderDigitalBuffer(bytes, project, target);
   const output = await saveFile(args.output, rendered.bytes, args.overwrite, [
     args.input,
     args.projectPath,

@@ -49,9 +49,10 @@ test('real CPU face assistance detects synthetic single/no/multiple faces and se
   expect(result.landmarks.eyesY / result.height).toBeGreaterThan(.3);
   expect(result.landmarks.eyesY / result.height).toBeLessThan(.5);
   expect(result.landmarks.chinY).toBeGreaterThan(result.landmarks.eyesY);
-  // Manually inspected synthetic reference: crown ≈235px, chin≈949px.
-  expect(Math.abs(result.landmarks.crownY - 235)).toBeLessThan(55);
-  expect(Math.abs(result.landmarks.chinY - 949)).toBeLessThan(55);
+  // Manually inspected synthetic reference (1024x1536 demo): crown ≈428px, eyes ≈716px, chin ≈1003px.
+  expect(Math.abs(result.landmarks.crownY - 428)).toBeLessThan(55);
+  expect(Math.abs(result.landmarks.chinY - 1003)).toBeLessThan(55);
+  expect(Math.abs(result.landmarks.eyesY - 716)).toBeLessThan(45);
   expect(result.noFaceError).toMatch(/no clear face/i);
   expect(result.multiFaceError).toMatch(/more than one face/i);
   expect(result.iou).toBeGreaterThan(.90);

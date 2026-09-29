@@ -6,6 +6,8 @@ import {
   type Paper,
   type Preset,
   type SheetLayout,
+  type SheetOptions,
+  type SheetStyle,
   type Issue,
 } from "./types.js";
 export function mmToPixels(mm: number, dpi = 300): number {
@@ -413,10 +415,37 @@ export function measurementChecks(
   });
   return checks;
 }
+interface Grid {
+  columns: number;
+  rows: number;
+  gap: number;
+  margin: number;
+}
+function gridFor(
+  pageWidth: number,
+  pageHeight: number,
+  photo: { width: number; height: number },
+  style: SheetStyle,
+  dpi: number,
+): Grid | null {
+  const margin = style === "edge-to-edge" ? 0 : mmToPixels(3, dpi),
+    gap = margin;
+  const columns = Math.floor(
+      (pageWidth - 2 * margin + gap) / (photo.width + gap),
+    ),
+    rows = Math.floor((pageHeight - 2 * margin + gap) / (photo.height + gap));
+  return columns < 1 || rows < 1 ? null : { columns, rows, gap, margin };
+}
+/**
+ * Lay photos out on paper. Style defaults to edge-to-edge on 4x6 (photo-lab prints) and cut marks on
+ * every other paper (home printer margins); orientation defaults to "auto", the paper direction that
+ * holds more photos (ties go to portrait). Every paper is defined portrait; landscape swaps its sides.
+ */
 export function layoutSheet(
   preset: Preset,
   paper: Paper | string,
   dpi = 300,
+  options: SheetOptions = {},
 ): SheetLayout {
   if (preset.mode === "original")
     throw new PortraitError(
@@ -424,18 +453,51 @@ export function layoutSheet(
       "Original digital photos cannot be laid out on a print sheet.",
     );
   const p = typeof paper === "string" ? getPaper(paper) : paper;
-  const photo = outputSize(preset, dpi),
-    width = mmToPixels(p.widthMm, dpi),
-    height = mmToPixels(p.heightMm, dpi),
-    margin = mmToPixels(3, dpi),
-    gap = mmToPixels(3, dpi);
-  const columns = Math.floor((width - 2 * margin + gap) / (photo.width + gap)),
-    rows = Math.floor((height - 2 * margin + gap) / (photo.height + gap));
-  if (columns < 1 || rows < 1)
+  const style: SheetStyle =
+    options.style ?? (p.id === "4x6" ? "edge-to-edge" : "cut-marks");
+  const wanted = options.orientation ?? "auto";
+  if (!["cut-marks", "edge-to-edge"].includes(style))
+    throw new PortraitError(
+      "INVALID_SHEET_STYLE",
+      "Sheet style must be cut-marks or edge-to-edge.",
+    );
+  if (!["auto", "portrait", "landscape"].includes(wanted))
+    throw new PortraitError(
+      "INVALID_SHEET_ORIENTATION",
+      "Sheet orientation must be auto, portrait or landscape.",
+    );
+  const photo = outputSize(preset, dpi);
+  const short = Math.min(p.widthMm, p.heightMm),
+    long = Math.max(p.widthMm, p.heightMm);
+  const candidate = (orientation: "portrait" | "landscape") => {
+    const widthMm = orientation === "portrait" ? short : long,
+      heightMm = orientation === "portrait" ? long : short;
+    const width = mmToPixels(widthMm, dpi),
+      height = mmToPixels(heightMm, dpi);
+    const grid = gridFor(width, height, photo, style, dpi);
+    return { orientation, widthMm, heightMm, width, height, grid };
+  };
+  const portrait = candidate("portrait"),
+    landscape = candidate("landscape");
+  const count = (c: typeof portrait) =>
+    c.grid ? c.grid.columns * c.grid.rows : 0;
+  const chosen =
+    wanted === "portrait"
+      ? portrait
+      : wanted === "landscape"
+        ? landscape
+        : count(landscape) > count(portrait)
+          ? landscape
+          : portrait;
+  const { grid, width, height } = chosen;
+  if (!grid)
     throw new PortraitError(
       "PAPER_TOO_SMALL",
-      "This photo does not fit on the selected paper with print margins.",
+      style === "edge-to-edge"
+        ? "This photo does not fit on the selected paper."
+        : "This photo does not fit on the selected paper with print margins.",
     );
+  const { columns, rows, gap } = grid;
   const startX = Math.round(
       (width - (columns * photo.width + (columns - 1) * gap)) / 2,
     ),
@@ -444,13 +506,30 @@ export function layoutSheet(
     );
   const placements: Crop[] = [],
     cutMarks: SheetLayout["cutMarks"] = [];
-  const offset = Math.max(1, mmToPixels(0.3, dpi)),
-    length = Math.max(2, mmToPixels(0.9, dpi));
   for (let row = 0; row < rows; row++)
-    for (let col = 0; col < columns; col++) {
-      const x = startX + col * (photo.width + gap),
-        y = startY + row * (photo.height + gap);
-      placements.push({ x, y, width: photo.width, height: photo.height });
+    for (let col = 0; col < columns; col++)
+      placements.push({
+        x: startX + col * (photo.width + gap),
+        y: startY + row * (photo.height + gap),
+        width: photo.width,
+        height: photo.height,
+      });
+  if (style === "edge-to-edge") {
+    // One guide per shared edge, running the length of the tiled block. Nothing on the outer edges.
+    const blockWidth = columns * photo.width,
+      blockHeight = rows * photo.height;
+    for (let col = 1; col < columns; col++) {
+      const x = startX + col * photo.width;
+      cutMarks.push({ x1: x, y1: startY, x2: x, y2: startY + blockHeight });
+    }
+    for (let row = 1; row < rows; row++) {
+      const y = startY + row * photo.height;
+      cutMarks.push({ x1: startX, y1: y, x2: startX + blockWidth, y2: y });
+    }
+  } else {
+    const offset = Math.max(1, mmToPixels(0.3, dpi)),
+      length = Math.max(2, mmToPixels(0.9, dpi));
+    for (const { x, y } of placements)
       for (const cornerX of [x, x + photo.width])
         for (const cornerY of [y, y + photo.height]) {
           const sx = cornerX === x ? -1 : 1,
@@ -470,16 +549,65 @@ export function layoutSheet(
             },
           );
         }
-    }
+  }
   return {
     width,
     height,
     dpi,
-    widthMm: p.widthMm,
-    heightMm: p.heightMm,
+    widthMm: chosen.widthMm,
+    heightMm: chosen.heightMm,
     placements,
     cutMarks,
     columns,
     rows,
+    orientation: chosen.orientation,
+    style,
   };
+}
+export interface SheetMm {
+  /** Photo positions on the page in millimetres from the top-left corner, at the preset's exact size. */
+  placements: Crop[];
+  /** Cut marks or guides in millimetres from the top-left corner. */
+  marks: SheetLayout["cutMarks"];
+}
+/**
+ * The layout in physical millimetres, for vector output (PDF). Cut-marks sheets keep the pixel
+ * positions (their 3 mm gaps absorb pixel rounding). Edge-to-edge sheets are re-tiled at the preset's
+ * exact size, because a 35 mm photo is 413.4 px: pixel pitch would make neighbouring photos overlap
+ * by a few hundredths of a millimetre, while exact millimetres tile with no overlap and no gap.
+ */
+export function sheetMm(layout: SheetLayout, preset: Preset): SheetMm {
+  const perPx = 25.4 / layout.dpi;
+  if (layout.style !== "edge-to-edge")
+    return {
+      placements: layout.placements.map((p) => ({
+        x: p.x * perPx,
+        y: p.y * perPx,
+        width: preset.widthMm,
+        height: preset.heightMm,
+      })),
+      marks: layout.cutMarks.map((m) => ({
+        x1: m.x1 * perPx,
+        y1: m.y1 * perPx,
+        x2: m.x2 * perPx,
+        y2: m.y2 * perPx,
+      })),
+    };
+  const { columns, rows } = layout,
+    w = preset.widthMm,
+    h = preset.heightMm;
+  const blockW = columns * w,
+    blockH = rows * h;
+  const x0 = Math.max(0, (layout.widthMm - blockW) / 2),
+    y0 = Math.max(0, (layout.heightMm - blockH) / 2);
+  const placements: Crop[] = [],
+    marks: SheetLayout["cutMarks"] = [];
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < columns; c++)
+      placements.push({ x: x0 + c * w, y: y0 + r * h, width: w, height: h });
+  for (let c = 1; c < columns; c++)
+    marks.push({ x1: x0 + c * w, y1: y0, x2: x0 + c * w, y2: y0 + blockH });
+  for (let r = 1; r < rows; r++)
+    marks.push({ x1: x0, y1: y0 + r * h, x2: x0 + blockW, y2: y0 + r * h });
+  return { placements, marks };
 }

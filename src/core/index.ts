@@ -3,3 +3,7 @@ export * from "./presets.js";
 export * from "./geometry.js";
 export * from "./project.js";
 export * from "./text.js";
+export * from "./documents.js";
+export * from "./encode.js";
+export * from "./analysis.js";
+export * from "./catalog.js";

@@ -13,6 +13,8 @@ pnpm install
 ./scripts/portraitpass crop --input /absolute/photo.jpg --preset uk-passport --json
 ./scripts/portraitpass render --input /absolute/photo.jpg --preset us-passport --format png --output /absolute/photo-sized.png --json
 ./scripts/portraitpass sheet --input /absolute/photo.jpg --preset uk-passport --paper 4x6 --format pdf --output /absolute/print-sheet.pdf --json
+./scripts/portraitpass sheet --input /absolute/photo.jpg --preset uk-passport --paper letter --layout cut-marks --orientation landscape --format pdf --output /absolute/letter-sheet.pdf --json
+./scripts/portraitpass digital --input /absolute/photo.jpg --preset us-passport --width 600 --height 600 --max-kb 240 --kb-bytes 1000 --output /absolute/dv-lottery.jpg --json
 ./scripts/portraitpass project --input /absolute/photo.jpg --preset uk-passport --embed --output /absolute/photo.portraitpass.json --json
 ./scripts/portraitpass render --project /absolute/photo.portraitpass.json --output /absolute/reviewed-crop.jpg --json
 ```
@@ -41,6 +43,33 @@ All crop and landmark coordinates are in **oriented original pixels**. `crop` is
 
 Default output is 300 DPI; `--dpi` accepts 72–600. For print and general presets the output format is inferred from the output extension (`.jpg`/`.jpeg`, `.png`, `.pdf`). An explicit `--format` that contradicts a recognised extension fails with `FORMAT_EXTENSION_MISMATCH`, as do `.webp`, `.gif`, `.tif`/`.tiff`, `.bmp`, `.avif`, `.heic`, `.heif` and `.svg` outputs. An unknown or missing extension falls back to the project's format. Original modes copy the source bytes, so the output extension must match the source type (`.jpg`/`.jpeg` for JPEG, `.png`, `.webp`, `.heic`/`.heif`); a JPEG/PNG/PDF-style extension that does not match fails the same way. Papers are `4x6`, `a4`, `letter`, portrait orientation. Safe print margins and gaps are 3 mm. Thus a 4×6 sheet holds two US 2×2 photos or six 35×45 photos. Print PDFs at actual size / 100%, with fit-to-page disabled. JPEG/PNG pixel dimensions are rounded to nearest pixel; PDF photo and paper sizes use physical millimetres exactly. Canvas and Sharp use different resampling filters; fractional source boundaries can differ by less than one source pixel. The stored source/crop dimensions remain identical.
 
+## Sheets: layout, orientation and exact digital files
+
+**Sheet layout.** `layout`, `sheet` and the MCP `portraitpass_layout` and `portraitpass_sheet` tools take two optional settings:
+
+- `--layout edge-to-edge|cut-marks` (MCP `sheetStyle`). `edge-to-edge` has no margins and no gaps: photos tile the paper from the corner (centred if there is leftover) and thin light-grey guides run only along shared edges, never inside a photo. Print it at a photo lab with "no borders / don't crop". `cut-marks` keeps 3 mm margins and gaps and draws corner marks outside every photo (home printer). Default: `edge-to-edge` on `4x6`, `cut-marks` on `a4` and `letter`.
+- `--orientation auto|portrait|landscape` (MCP `sheetOrientation`). `auto` lays out both paper directions and keeps the one with more photos (ties go to portrait). The layout and the PDF page are oriented accordingly: `width`, `height`, `widthMm` and `heightMm` describe the page as printed, and `orientation` and `style` report what was chosen.
+
+Photos per sheet with the defaults (orientation auto):
+
+| Preset (photo) | 4x6 (edge-to-edge) | A4 (cut-marks) | Letter (cut-marks) |
+| --- | --- | --- | --- |
+| `us-passport` (50.8 × 50.8) | 6 (2 × 3) | 15 | 15 |
+| `uk-passport`, `au-passport`, `general-id` (35 × 45) | 8 (landscape 4 × 2) | 30 | 28 (landscape) |
+
+With `edge-to-edge` on A4 and Letter: 20 for `us-passport`, 36 for the 35 × 45 presets. A project can store `sheetStyle` and `sheetOrientation`; an explicit argument overrides the project, and omitted arguments keep the project's values.
+
+**Exact digital export.** `digital` writes one JPEG at exact pixels inside a file-size range, for forms that state both (for example 600 × 600 px, at most 240 KB for a lottery photo, or 20 to 50 KB for an exam upload):
+
+```sh
+./scripts/portraitpass digital --input /absolute/photo.jpg --preset us-passport --width 600 --height 600 --max-kb 240 --kb-bytes 1000 --output /absolute/dv.jpg --json
+./scripts/portraitpass digital --input /absolute/photo.jpg --preset general-id --width 200 --height 230 --min-kb 20 --max-kb 50 --output /absolute/exam.jpg --json
+```
+
+`--width` and `--height` are required; `--min-kb`, `--max-kb`, `--kb-bytes` (`1000` or `1024`, default `1024`; use `1000` when the form means decimal KB), `--crop`, `--project` and `--overwrite` are optional. The crop must have the same shape as the target. With `--input` and no `--crop`, a centred crop of the target shape is used; with a project, a different shape fails with `ASPECT_MISMATCH` and a suggested crop. The photo is only ever scaled down: a crop with fewer pixels than the target fails with `LOW_RESOLUTION`. JPEG quality is searched between 0.3 and 0.95 in at most 8 encodes to land inside the range, keeping the highest quality that fits. If even the highest quality is under `--min-kb`, the file is padded with a JPEG comment segment up to the minimum (`padded: true`, `paddedBytes`); the pixels and quality are unchanged, which satisfies forms with a minimum size. If even the lowest quality is over `--max-kb`, the command fails with `FILE_SIZE_UNREACHABLE`; choose fewer pixels. Digital-original presets (`us-online`, `uk-online`) are never re-encoded (`ORIGINAL_ONLY`).
+
+The result carries `width`, `height`, `bytes`, `kb`, `kbBytes`, `minBytes`, `maxBytes`, `quality`, `padded`, `paddedBytes`, `encodes`, `backgroundReplaced`, `checks` (head, eyes and centre measurements, only when the pixel shape matches the preset shape), `fileChecks` (`pixels` and `filesize`) and `warnings`. The output must be a `.jpg` or `.jpeg` path.
+
 ## JSON and file safety
 
 For machine consumers use `./scripts/portraitpass`; `pnpm cli` is a human convenience and package-manager messages may appear on stdout. The direct CLI prints a JSON envelope: `{ "ok": true, "result": ... }` or `{ "ok": false, "error": { "code": "...", "message": "..." } }`; `--json` makes it compact. Errors never contain file paths.
@@ -51,7 +80,7 @@ Exit codes:
 | --- | --- | --- |
 | `0` | success | |
 | `1` | internal failure | `INTERNAL_ERROR` |
-| `2` | invalid command or data (the default for anything not listed below) | `FORMAT_EXTENSION_MISMATCH`, `PRESET_PROJECT_CONFLICT`, `INVALID_ARGUMENT`, `INVALID_JSON`, `INVALID_OUTPUT_KIND`, `PATH_NOT_ABSOLUTE` (MCP only), unknown preset or paper, invalid crop, `LOW_RESOLUTION`, `ASPECT_MISMATCH`, invalid project, and so on |
+| `2` | invalid command or data (the default for anything not listed below) | `FORMAT_EXTENSION_MISMATCH`, `PRESET_PROJECT_CONFLICT`, `INVALID_ARGUMENT`, `INVALID_JSON`, `INVALID_OUTPUT_KIND`, `PATH_NOT_ABSOLUTE` (MCP only), unknown preset or paper, invalid crop, `LOW_RESOLUTION`, `ASPECT_MISMATCH`, `INVALID_SHEET_STYLE`, `INVALID_SHEET_ORIENTATION`, `INVALID_DIGITAL_TARGET`, `FILE_SIZE_UNREACHABLE`, `ORIGINAL_ONLY`, invalid project, and so on |
 | `3` | source or input problem | `INPUT_NOT_FOUND`, `SOURCE_REQUIRED`, `INVALID_IMAGE`, `UNSUPPORTED_IMAGE`, `INVALID_INPUT`, `FILE_TOO_LARGE`, `PROJECT_NOT_FOUND`, `ORIGINAL_NOT_ACCEPTED` |
 | `4` | output problem | `OUTPUT_EXISTS`, `OUTPUT_WRITE`, `OUTPUT_DIRECTORY`, `SOURCE_OVERWRITE` (also raised when the output is the `--project` file) |
 
@@ -76,12 +105,14 @@ Outputs use exclusive creation by default. `--overwrite` must be explicit; sourc
   "landmarks": {"centerX": 600, "crownY": 350, "eyesY": 650, "chinY": 1100},
   "dpi": 300,
   "paperId": "4x6",
+  "sheetStyle": "edge-to-edge",
+  "sheetOrientation": "auto",
   "format": "jpeg",
   "background": {"enabled": false, "color": "#ffffff", "tolerance": 32}
 }
 ```
 
-`dataUrl` and `landmarks` are optional. `outputKind` is optional (`single` or `sheet`) and restores the browser preview/export intent; explicit CLI `render` and `sheet` commands choose their named output kind. Source width/height must match the decoded oriented image. `format` is `jpeg`, `png`, `pdf`, or `original` (only online presets). `source.mime` may also be `image/heic` or `image/heif`, but only in projects for original modes. General ID optionally adds `customSize: {widthMm,heightMm}` in the range 10–100 × 10–150 mm. Background replacement is available for print and general presets, never for original modes. For US, UK and Australia passports it is off by default because those authorities' rules forbid altering the photo, and outputs that use it carry the metadata note "Background replaced with PortraitPass". A mask is stored only while background replacement is on; when it is off the mask is dropped on validation. `landmarks` (head positions) are saved only when set. When enabled, the background requires `maskDataUrl`, a PNG data URL at exactly the source’s oriented dimensions with alpha 0 for background and 255 for foreground (fractional alpha supported). The interactive browser creates this mask; Node consumes it deterministically. `tolerance` is reserved editor metadata (0–100), not a second segmentation algorithm. Maximum mask data URL length is 20 million characters. Without a saved mask, Node background rendering fails with `MASK_REQUIRED`. Original modes reject an enabled background (`BACKGROUND_FORBIDDEN`).
+`dataUrl`, `landmarks`, `sheetStyle` (`edge-to-edge` or `cut-marks`) and `sheetOrientation` (`auto`, `portrait` or `landscape`) are optional. `outputKind` is optional (`single` or `sheet`) and restores the browser preview/export intent; explicit CLI `render` and `sheet` commands choose their named output kind. Source width/height must match the decoded oriented image. `format` is `jpeg`, `png`, `pdf`, or `original` (only online presets). `source.mime` may also be `image/heic` or `image/heif`, but only in projects for original modes. General ID optionally adds `customSize: {widthMm,heightMm}` in the range 10–100 × 10–150 mm. Background replacement is available for print and general presets, never for original modes. For US, UK and Australia passports it is off by default because those authorities' rules forbid altering the photo, and outputs that use it carry the metadata note "Background replaced with PortraitPass". A mask is stored only while background replacement is on; when it is off the mask is dropped on validation. `landmarks` (head positions) are saved only when set. When enabled, the background requires `maskDataUrl`, a PNG data URL at exactly the source’s oriented dimensions with alpha 0 for background and 255 for foreground (fractional alpha supported). The interactive browser creates this mask; Node consumes it deterministically. `tolerance` is reserved editor metadata (0–100), not a second segmentation algorithm. Maximum mask data URL length is 20 million characters. Without a saved mask, Node background rendering fails with `MASK_REQUIRED`. Original modes reject an enabled background (`BACKGROUND_FORBIDDEN`).
 
 ## MCP stdio
 
@@ -107,9 +138,10 @@ All path arguments (`input`, `projectPath`, `output`) must be absolute; relative
 | `portraitpass_presets` | List presets, papers, sources and notes | none |
 | `portraitpass_inspect` | Decode source metadata, optional original guidance | `input`, optional `presetId` |
 | `portraitpass_crop` | Propose centered/manual-landmark crop | `input`, `presetId`, optional `landmarks` |
-| `portraitpass_layout` | Pure sheet geometry, placements and cut marks | `presetId`, `paperId`, optional `dpi` |
+| `portraitpass_layout` | Pure sheet geometry, placements and cut marks or edge guides | `presetId`, `paperId`, optional `dpi`, `sheetStyle`, `sheetOrientation` |
 | `portraitpass_render` | One image/PDF or unchanged original | `output`, `input` or `projectPath`, optional `presetId`, `format`, `crop`, `dpi`, `overwrite` |
-| `portraitpass_sheet` | Print sheet image/PDF | render arguments plus `paperId` |
+| `portraitpass_sheet` | Print sheet image/PDF | render arguments plus `paperId`, `sheetStyle`, `sheetOrientation` |
+| `portraitpass_digital` | One JPEG at exact pixels within a KB range | `output`, `widthPx`, `heightPx`, `input` or `projectPath`, optional `presetId`, `minKB`, `maxKB`, `kbBytes` (1000 or 1024), `crop`, `overwrite` |
 | `portraitpass_project` | Save portable browser handoff | `input`, `presetId`, `output`, optional `overwrite` |
 
 Example `tools/call` arguments:

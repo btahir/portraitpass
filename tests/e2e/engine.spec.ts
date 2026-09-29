@@ -35,7 +35,11 @@ test('browser exports have independent expected image and physical PDF sizes', a
   const mm: Record<string, number[]> = { 'us-passport': [50.8, 50.8], 'uk-passport': [35, 45], 'au-passport': [35, 45], 'general-id': [35, 45], '4x6': [101.6, 152.4], a4: [210, 297], letter: [215.9, 279.4] };
   for (const output of outputs) {
     const [presetId,paperId]=output.id.split(':');
-    const bytes = Buffer.from(output.bytes), size = mm[paperId??presetId];
+    // Default sheet layout: edge-to-edge on 4x6, cut marks on A4/Letter; orientation auto (more photos wins, ties portrait).
+    const sheetInfo:Record<string,{count:number;landscape:boolean}>=presetId==='us-passport'?{'4x6':{count:6,landscape:false},a4:{count:15,landscape:false},letter:{count:15,landscape:false}}:{'4x6':{count:8,landscape:true},a4:{count:30,landscape:false},letter:{count:28,landscape:true}};
+    const paper=paperId?sheetInfo[paperId]:undefined;
+    const base=mm[paperId??presetId];
+    const bytes = Buffer.from(output.bytes), size = paper?.landscape?[base[1],base[0]]:base;
     if (output.format === 'pdf') {
       const doc = await PDFDocument.load(bytes);
       expect(doc.getPageCount()).toBe(1);
@@ -51,15 +55,14 @@ test('browser exports have independent expected image and physical PDF sizes', a
         else if(line.endsWith(' cm')){const [a,b,c,d,e,f]=line.split(' ').map(Number);const [A,B,C,D,E,F]=matrix;matrix=[A*a+C*b,B*a+D*b,A*c+C*d,B*c+D*d,A*e+C*f+E,B*e+D*f+F];}
         else if(line.endsWith(' Do'))images.push([...matrix]);
       }
-      const sheetCount:Record<string,number>=presetId==='us-passport'?{'4x6':2,a4:15,letter:15}:{'4x6':6,a4:30,letter:25};
-      expect(images.length).toBe(paperId?sheetCount[paperId]:1);
+      expect(images.length).toBe(paper?paper.count:1);
       const photoMm=mm[presetId];
       for(const [i,m]of images.entries()){
         expect(m[1]).toBe(0);expect(m[2]).toBe(0);
         expect(m[0]).toBeCloseTo(photoMm[0]*72/25.4,4);expect(m[3]).toBeCloseTo(photoMm[1]*72/25.4,4);
         expect(m[4]).toBeGreaterThanOrEqual(-.001);expect(m[5]).toBeGreaterThanOrEqual(-.001);
         expect(m[4]+m[0]).toBeLessThanOrEqual(page.getWidth()+.001);expect(m[5]+m[3]).toBeLessThanOrEqual(page.getHeight()+.001);
-        for(const n of images.slice(i+1))expect(m[4]+m[0]<=n[4]||n[4]+n[0]<=m[4]||m[5]+m[3]<=n[5]||n[5]+n[3]<=m[5]).toBe(true);
+        for(const n of images.slice(i+1))expect(m[4]+m[0]<=n[4]+.001||n[4]+n[0]<=m[4]+.001||m[5]+m[3]<=n[5]+.001||n[5]+n[3]<=m[5]+.001).toBe(true);
       }
 
     } else {
@@ -418,13 +421,13 @@ test('600 DPI sheets: PDF works at any size, raster sheets over the canvas budge
     expect(message, key).toMatch(/PDF/);
     expect(message, key).toMatch(/300 DPI/);
   }
-  for (const [bytes, size] of [[result.pdf, [210, 297]], [result.letterPdf, [215.9, 279.4]]] as const) {
+  for (const [bytes, size] of [[result.pdf, [210, 297]], [result.letterPdf, [279.4, 215.9]]] as const) {
     const doc = await PDFDocument.load(Buffer.from(bytes));
     expect(doc.getPageCount()).toBe(1);
     expect(doc.getPage(0).getWidth()).toBeCloseTo(size[0] * 72 / 25.4, 4);
     expect(doc.getPage(0).getHeight()).toBeCloseTo(size[1] * 72 / 25.4, 4);
   }
-  expect(result.small).toEqual({ width: 2400, height: 3600, pixelsPerMetre: Math.round(600 / 0.0254) });
+  expect(result.small).toEqual({ width: 3600, height: 2400, pixelsPerMetre: Math.round(600 / 0.0254) });
 });
 
 test('spec guides draw eye and head bands from the preset, with or without landmarks', async ({ page }) => {
@@ -528,4 +531,44 @@ test('original downloads get a safe name with the extension from the sniffed typ
   expect(names[4]).toBe('photo.png');
   expect(names[5]).toBe('no-extension.png');
   for (const name of names) expect(name).not.toMatch(/[\\/\u0000-\u001f]/);
+});
+
+test('exportDigital: exact pixels inside a KB range, padding below the minimum, errors for enlarging and unreachable caps', async ({ page }) => {
+  await page.goto('/');
+  const base64 = (await geometryImage()).toString('base64');
+  const result = await page.evaluate(async base64 => {
+    const enginePath = '/src/browser/engine.ts', corePath = '/src/core/index.ts';
+    const engine = await import(/* @vite-ignore */ enginePath), core = await import(/* @vite-ignore */ corePath);
+    const photo = await engine.loadPhoto(new File([Uint8Array.from(atob(base64), c => c.charCodeAt(0))], 'geometry.png', { type: 'image/png' }));
+    const preset = core.getPreset('us-passport'), crop = core.defaultCrop(photo.width, photo.height, preset);
+    const size = async (b: Blob) => { const img = await createImageBitmap(b); const r = { width: img.width, height: img.height }; img.close(); return r; };
+    const ok = await engine.exportDigital(photo, preset, crop, { widthPx: 600, heightPx: 600, maxKB: 240, kbBytes: 1000, format: 'jpeg' });
+    const padded = await engine.exportDigital(photo, preset, crop, { widthPx: 100, heightPx: 100, minKB: 20, maxKB: 50, format: 'jpeg' });
+    const errors: Record<string, string> = {};
+    for (const [name, target] of [
+      ['enlarge', { widthPx: Math.floor(crop.width) * 2, heightPx: Math.floor(crop.height) * 2, format: 'jpeg' }],
+      ['unreachable', { widthPx: 600, heightPx: 600, maxKB: 0.05, format: 'jpeg' }],
+      ['shape', { widthPx: 600, heightPx: 700, format: 'jpeg' }],
+    ] as const) {
+      try { await engine.exportDigital(photo, preset, crop, target); errors[name] = 'accepted'; }
+      catch (e) { errors[name] = `${(e as { code?: string }).code}: ${(e as Error).message}`; }
+    }
+    engine.releasePhoto(photo);
+    return {
+      ok: { ...ok, blob: undefined, bytesRead: Array.from(new Uint8Array(await ok.blob.arrayBuffer())).length, type: ok.blob.type, decoded: await size(ok.blob) },
+      padded: { ...padded, blob: undefined, type: padded.blob.type, decoded: await size(padded.blob), length: padded.blob.size },
+      errors,
+    };
+  }, base64);
+  expect(result.ok.type).toBe('image/jpeg');
+  expect(result.ok.decoded).toEqual({ width: 600, height: 600 });
+  expect(result.ok.bytes).toBe(result.ok.bytesRead);
+  expect(result.ok.bytes).toBeLessThanOrEqual(240_000);
+  expect(result.ok.padded).toBe(false);
+  expect(result.padded.decoded).toEqual({ width: 100, height: 100 });
+  expect(result.padded.length).toBeGreaterThanOrEqual(20 * 1024);
+  expect(result.padded.length).toBeLessThanOrEqual(50 * 1024);
+  expect(result.errors.enlarge).toMatch(/^LOW_RESOLUTION:.*never enlarged/);
+  expect(result.errors.unreachable).toMatch(/^FILE_SIZE_UNREACHABLE:.*smaller pixel size/);
+  expect(result.errors.shape).toMatch(/^ASPECT_MISMATCH:/);
 });

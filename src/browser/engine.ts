@@ -16,10 +16,26 @@ import {
   guideBands,
   outputSize,
   layoutSheet,
+  sheetMm,
   parseProject,
   validateProject,
 } from "../core/index";
-import type { Crop, Preset, Project, Landmarks } from "../core/index";
+import {
+  digitalTargetBytes,
+  fitToFileSize,
+  MIN_JPEG_QUALITY,
+  MAX_JPEG_QUALITY,
+} from "../core/index";
+import type {
+  Crop,
+  DigitalTarget,
+  Preset,
+  Project,
+  Landmarks,
+  SheetLayout,
+  SheetOrientation,
+  SheetStyle,
+} from "../core/index";
 
 export interface LoadedPhoto {
   file: File;
@@ -43,6 +59,10 @@ export interface LoadedPhoto {
 export interface RenderOptions {
   paperId?: string;
   sheet?: boolean;
+  /** Sheet style. Omitted: edge-to-edge on 4x6, cut marks on A4/Letter. */
+  sheetStyle?: SheetStyle;
+  /** Sheet paper orientation. Omitted: "auto", whichever direction holds more photos. */
+  sheetOrientation?: SheetOrientation;
   /** Draw spec guides: eye band, centre line and head-height guidance (single-photo preview only). */
   guides?: boolean;
   background?: string;
@@ -444,7 +464,12 @@ export function renderPreview(
             height: Math.round((800 * preset.heightMm) / preset.widthMm),
           }
       : sheet
-        ? layoutSheet(preset, options.paperId ?? "4x6", options.dpi ?? 300)
+        ? layoutSheet(
+            preset,
+            options.paperId ?? "4x6",
+            options.dpi ?? 300,
+            sheetOptions(options),
+          )
         : outputSize(preset, options.dpi ?? 300);
   const ratio = Math.min(1, 1000 / Math.max(size.width, size.height));
   target.width = Math.round(size.width * ratio);
@@ -468,6 +493,7 @@ export function renderPreview(
       preset,
       options.paperId ?? "4x6",
       options.dpi ?? 300,
+      sheetOptions(options),
     );
     const first = layout.placements[0],
       composite =
@@ -496,14 +522,7 @@ export function renderPreview(
           p.height,
         );
     if (composite) freeCanvas(composite);
-    ctx.strokeStyle = "#89918d";
-    ctx.lineWidth = 1;
-    for (const m of layout.cutMarks) {
-      ctx.beginPath();
-      ctx.moveTo(m.x1, m.y1);
-      ctx.lineTo(m.x2, m.y2);
-      ctx.stroke();
-    }
+    strokeSheetMarks(ctx, layout, "#89918d", "#c8ccc9");
   } else {
     if (mask && options.background) {
       const composite = compositeCrop(
@@ -541,6 +560,25 @@ export function renderPreview(
           shown > 0 ? target.width / shown : 1,
         );
       }
+  }
+}
+function sheetOptions(options: Pick<RenderOptions, "sheetStyle" | "sheetOrientation">) {
+  return { style: options.sheetStyle, orientation: options.sheetOrientation };
+}
+/** Cut marks in a darker grey; edge-to-edge guides in a light hairline that never enters a photo. */
+function strokeSheetMarks(
+  ctx: CanvasRenderingContext2D,
+  layout: SheetLayout,
+  marks: string,
+  guides: string,
+) {
+  ctx.strokeStyle = layout.style === "edge-to-edge" ? guides : marks;
+  ctx.lineWidth = 1;
+  for (const m of layout.cutMarks) {
+    ctx.beginPath();
+    ctx.moveTo(m.x1, m.y1);
+    ctx.lineTo(m.x2, m.y2);
+    ctx.stroke();
   }
 }
 function toBlob(
@@ -694,7 +732,7 @@ export async function exportPhoto(
   if (issues.length) throw new Error(issues[0].message);
   const size = outputSize(preset, dpi),
     layout = options.sheet
-      ? layoutSheet(preset, options.paperId ?? "4x6", dpi)
+      ? layoutSheet(preset, options.paperId ?? "4x6", dpi, sheetOptions(options))
       : null;
   // Raster sheets are one canvas. Over the budget (600 DPI A4 or Letter, ~34 MP) that fails on iOS
   // Safari, and hand-assembling a PNG or JPEG from strips is not worth the risk. PDF places each photo
@@ -773,28 +811,31 @@ export async function exportPhoto(
       heightMm = layout?.heightMm ?? preset.heightMm;
     const pt = 72 / 25.4,
       page = doc.addPage([widthMm * pt, heightMm * pt]);
-    const placements = layout?.placements ?? [
-      { x: 0, y: 0, width: size.width, height: size.height },
-    ];
+    // Millimetre placements at the preset's exact size (edge-to-edge tiles do not overlap).
+    const { placements, marks } = layout
+      ? sheetMm(layout, preset)
+      : {
+          placements: [
+            { x: 0, y: 0, width: preset.widthMm, height: preset.heightMm },
+          ],
+          marks: [],
+        };
     for (const p of placements)
       page.drawImage(embedded, {
-        x: (p.x * 72) / dpi,
-        y: heightMm * pt - (p.y * 72) / dpi - preset.heightMm * pt,
-        width: preset.widthMm * pt,
-        height: preset.heightMm * pt,
+        x: p.x * pt,
+        y: (heightMm - p.y - p.height) * pt,
+        width: p.width * pt,
+        height: p.height * pt,
       });
-    for (const m of layout?.cutMarks ?? [])
+    for (const m of marks)
       page.drawLine({
-        start: {
-          x: (m.x1 * 72) / dpi,
-          y: heightMm * pt - (m.y1 * 72) / dpi,
-        },
-        end: {
-          x: (m.x2 * 72) / dpi,
-          y: heightMm * pt - (m.y2 * 72) / dpi,
-        },
-        thickness: 0.25,
-        color: rgb(0.5, 0.5, 0.5),
+        start: { x: m.x1 * pt, y: (heightMm - m.y1) * pt },
+        end: { x: m.x2 * pt, y: (heightMm - m.y2) * pt },
+        thickness: layout?.style === "edge-to-edge" ? 0.2 : 0.25,
+        color:
+          layout?.style === "edge-to-edge"
+            ? rgb(0.78, 0.78, 0.78)
+            : rgb(0.5, 0.5, 0.5),
       });
     return {
       blob: new Blob([new Uint8Array(await doc.save())], {
@@ -810,14 +851,7 @@ export async function exportPhoto(
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, out.width, out.height);
     for (const p of layout.placements) ctx.drawImage(single, p.x, p.y);
-    ctx.strokeStyle = "#888";
-    ctx.lineWidth = 1;
-    for (const m of layout.cutMarks) {
-      ctx.beginPath();
-      ctx.moveTo(m.x1, m.y1);
-      ctx.lineTo(m.x2, m.y2);
-      ctx.stroke();
-    }
+    strokeSheetMarks(ctx, layout, "#888", "#c8c8c8");
     freeCanvas(single);
   }
   const encoded = await toBlob(out, `image/${options.format}`);
@@ -826,6 +860,126 @@ export async function exportPhoto(
     blob: await withDensity(encoded, dpi, replaced ? BACKGROUND_NOTE : undefined),
     filename: `portraitpass-${preset.id}-${suffix}.${options.format === "jpeg" ? "jpg" : "png"}`,
   };
+}
+export interface DigitalExportOptions {
+  /** Replacement background colour; needs the mask from prepareBackground. */
+  background?: string;
+}
+export interface DigitalExport {
+  blob: Blob;
+  filename: string;
+  width: number;
+  height: number;
+  bytes: number;
+  /** JPEG quality (0–1) of the kept encode. */
+  quality: number;
+  /** True when a JPEG comment segment was added to reach the minimum size (pixels unchanged). */
+  padded: boolean;
+  paddedBytes: number;
+  encodes: number;
+}
+async function canvasJpeg(c: HTMLCanvasElement, quality: number, note?: string) {
+  const blob = await toBlob(c, "image/jpeg", quality);
+  if (blob.type !== "image/jpeg")
+    throw new Error("This browser cannot write JPEG files.");
+  // Same metadata handling as prints: a JFIF header, and the background note when the background was replaced.
+  const out = note ? await withDensity(blob, 72, note) : blob;
+  return new Uint8Array(await out.arrayBuffer());
+}
+/**
+ * Exact digital export: crop, scale down to widthPx x heightPx (never up) and search JPEG quality so
+ * the file lands inside minKB..maxKB. Uses the same core search as the Node adapter. Throws
+ * LOW_RESOLUTION when the crop has fewer pixels than the target, and FILE_SIZE_UNREACHABLE when even
+ * the lowest quality is over the maximum (choose fewer pixels).
+ */
+export async function exportDigital(
+  photo: LoadedPhoto,
+  preset: Preset,
+  crop: Crop,
+  target: DigitalTarget,
+  options: DigitalExportOptions = {},
+): Promise<DigitalExport> {
+  if (preset.mode === "original")
+    throw new PortraitError(
+      "ORIGINAL_ONLY",
+      "Digital originals are exported unchanged and are never resized or re-encoded.",
+    );
+  assertEditable(photo);
+  const limits = digitalTargetBytes(target);
+  const issues = cropIssues(crop, photo.width, photo.height, preset, 300).filter(
+    (i) => i.code === "INVALID_CROP",
+  );
+  if (issues.length) throw new PortraitError("INVALID_CROP", issues[0].message);
+  if (
+    Math.abs(crop.width / crop.height - target.widthPx / target.heightPx) /
+      (target.widthPx / target.heightPx) >
+    0.005
+  )
+    throw new PortraitError(
+      "ASPECT_MISMATCH",
+      `The crop is not the same shape as ${target.widthPx} × ${target.heightPx}.`,
+    );
+  if (
+    crop.width + 0.01 < target.widthPx ||
+    crop.height + 0.01 < target.heightPx
+  )
+    throw new PortraitError(
+      "LOW_RESOLUTION",
+      `The crop holds ${Math.floor(crop.width)} × ${Math.floor(crop.height)} pixels and ${target.widthPx} × ${target.heightPx} were asked for. Photos are never enlarged: choose a smaller size or a photo with more pixels.`,
+    );
+  let mask: HTMLCanvasElement | undefined;
+  if (options.background) {
+    await prepareBackground(photo);
+    mask = backgroundMask(photo, options.background);
+  }
+  const replaced = !!mask && !!options.background;
+  const c =
+    mask && options.background
+      ? compositeCrop(photo, crop, mask, options.background, target.widthPx, target.heightPx)
+      : (() => {
+          const out = canvas(target.widthPx, target.heightPx);
+          const ctx = context(out);
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = "high";
+          ctx.drawImage(
+            photo.image,
+            crop.x,
+            crop.y,
+            crop.width,
+            crop.height,
+            0,
+            0,
+            target.widthPx,
+            target.heightPx,
+          );
+          return out;
+        })();
+  try {
+    // JPEG has no alpha: put the picture on white so nothing turns black.
+    const ctx = context(c);
+    ctx.globalCompositeOperation = "destination-over";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.globalCompositeOperation = "source-over";
+    const fit = await fitToFileSize(
+      (q) => canvasJpeg(c, q, replaced ? BACKGROUND_NOTE : undefined),
+      limits,
+      { minQuality: MIN_JPEG_QUALITY, maxQuality: MAX_JPEG_QUALITY, maxIterations: 8 },
+    );
+    return {
+      blob: new Blob([fit.bytes as BlobPart], { type: "image/jpeg" }),
+      filename: `portraitpass-${preset.id}-${target.widthPx}x${target.heightPx}.jpg`,
+      width: target.widthPx,
+      height: target.heightPx,
+      bytes: fit.bytes.length,
+      quality: fit.quality,
+      padded: fit.padded,
+      paddedBytes: fit.paddedBytes,
+      encodes: fit.iterations,
+    };
+  } finally {
+    freeCanvas(c);
+  }
 }
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob),
@@ -1022,6 +1176,8 @@ export async function saveProject(
     format?: "png" | "jpeg" | "pdf";
     dpi?: number;
     sheet?: boolean;
+    sheetStyle?: SheetStyle;
+    sheetOrientation?: SheetOrientation;
   } = {},
 ) {
   if (preset.mode !== "original") assertEditable(photo);
@@ -1047,6 +1203,10 @@ export async function saveProject(
     format:
       preset.mode === "original" ? "original" : (options.format ?? "jpeg"),
     ...(options.landmarks ? { landmarks: options.landmarks } : {}),
+    ...(options.sheetStyle ? { sheetStyle: options.sheetStyle } : {}),
+    ...(options.sheetOrientation
+      ? { sheetOrientation: options.sheetOrientation }
+      : {}),
     background: {
       enabled: editing,
       color: options.background ?? "#ffffff",
@@ -1100,6 +1260,8 @@ export async function openProject(
   format?: string;
   dpi: number;
   sheet: boolean;
+  sheetStyle?: SheetStyle;
+  sheetOrientation?: SheetOrientation;
 }> {
   if (file.size > 60 * 1024 * 1024) throw new Error("Project is too large.");
   const p = parseProject(await file.text());
@@ -1165,5 +1327,7 @@ export async function openProject(
     format: p.format,
     dpi: p.dpi,
     sheet: p.outputKind === "sheet",
+    sheetStyle: p.sheetStyle,
+    sheetOrientation: p.sheetOrientation,
   };
 }

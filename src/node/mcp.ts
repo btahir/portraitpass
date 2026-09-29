@@ -17,6 +17,7 @@ import {
   errorPayload,
   inspectFile,
   prepareProject,
+  renderDigital,
   renderFile,
   saveFile,
 } from "./operations.js";
@@ -164,6 +165,20 @@ const renderSchema = {
       "Replace an existing output file. Source and project files are never replaced.",
     ),
 };
+const sheetSchema = {
+  sheetStyle: z
+    .enum(["edge-to-edge", "cut-marks"])
+    .optional()
+    .describe(
+      "Sheet style. Omit to use the project's, else edge-to-edge on 4x6 and cut-marks on A4/Letter.",
+    ),
+  sheetOrientation: z
+    .enum(["auto", "portrait", "landscape"])
+    .optional()
+    .describe(
+      "Paper orientation. Omit to use the project's, else auto (the direction with more photos; ties go to portrait).",
+    ),
+};
 function renderArgs(args: {
   input?: string;
   projectPath?: string;
@@ -194,9 +209,10 @@ server.registerTool(
   "portraitpass_sheet",
   {
     description:
-      "Render a print sheet with real dimensions, safe margins and cut marks. Digital-original modes cannot be printed. Paper comes from paperId, else the project, else 4x6. Results carry `checks` and `warnings` as for render. All paths must be absolute.",
+      "Render a print sheet with real dimensions. Style: edge-to-edge (no margins, thin guides on shared edges; the default on 4x6 photo-lab paper) or cut-marks (3 mm margins and corner marks; the default on A4 and Letter). Orientation auto picks the paper direction that holds more photos. Digital-original modes cannot be printed. Paper, style and orientation come from the arguments, else the project, else the defaults. Results carry `layout` (orientation, style, columns, rows), `checks` and `warnings` as for render. All paths must be absolute.",
     inputSchema: {
       ...renderSchema,
+      ...sheetSchema,
       paperId: z
         .enum(["4x6", "a4", "letter"])
         .optional()
@@ -210,25 +226,69 @@ server.registerTool(
   (args) =>
     respond(() => {
       renderArgs(args);
-      return renderFile({ ...args, sheet: true });
+      return renderFile({
+        ...args,
+        sheet: true,
+        sheetStyle: args.sheetStyle,
+        sheetOrientation: args.sheetOrientation,
+      });
+    }),
+);
+server.registerTool(
+  "portraitpass_digital",
+  {
+    description:
+      "Export one JPEG at exact pixel size inside a file-size range: crops with the preset or project crop, downscales (never enlarges; LOW_RESOLUTION otherwise) and searches JPEG quality to land within minKB..maxKB. If even top quality is under minKB the file is padded with a JPEG comment segment (pixels unchanged, `padded: true`); if even the lowest quality is over maxKB it fails with FILE_SIZE_UNREACHABLE (choose fewer pixels). kbBytes says how many bytes one KB is (1024 default, or 1000). Results carry bytes, kb, quality, padded, `fileChecks`, `checks` and `warnings`. Digital-original presets are never re-encoded (ORIGINAL_ONLY). All paths must be absolute.",
+    inputSchema: {
+      input: absolutePath("Photo to export.").optional(),
+      projectPath: absolutePath("Saved .portraitpass.json project.").optional(),
+      presetId: z
+        .string()
+        .optional()
+        .describe(
+          "Document preset (e.g. us-passport for a 600 x 600 lottery photo, general-id for other shapes). With projectPath it must match the project's preset.",
+        ),
+      output: absolutePath("Where to write the JPEG (.jpg or .jpeg)."),
+      widthPx: z.number().int().min(1).max(10000),
+      heightPx: z.number().int().min(1).max(10000),
+      minKB: z.number().positive().optional(),
+      maxKB: z.number().positive().optional(),
+      kbBytes: z
+        .union([z.literal(1000), z.literal(1024)])
+        .optional()
+        .describe("Bytes per KB for minKB and maxKB. Default 1024; use 1000 when the form means decimal KB."),
+      crop: cropSchema.optional(),
+      overwrite: z.boolean().optional(),
+    },
+    outputSchema: responseSchema,
+    annotations: { destructiveHint: true, openWorldHint: false },
+  },
+  (args) =>
+    respond(() => {
+      renderArgs(args);
+      return renderDigital(args);
     }),
 );
 server.registerTool(
   "portraitpass_layout",
   {
     description:
-      "Calculate sheet placement and outside-photo cut marks in pixels without reading images.",
+      "Calculate sheet placement and cut marks or edge guides in pixels without reading images. Optional sheetStyle (edge-to-edge or cut-marks) and sheetOrientation (auto, portrait, landscape); defaults are edge-to-edge on 4x6, cut-marks on A4/Letter, orientation auto. The result reports the resolved orientation and style.",
     inputSchema: {
       presetId: z.string(),
       paperId: z.enum(["4x6", "a4", "letter"]),
       dpi: z.number().min(72).max(600).default(300),
+      ...sheetSchema,
     },
     outputSchema: responseSchema,
     annotations: { readOnlyHint: true, openWorldHint: false },
   },
   (args) =>
     respond(() => ({
-      ...layoutSheet(getPreset(args.presetId), args.paperId, args.dpi),
+      ...layoutSheet(getPreset(args.presetId), args.paperId, args.dpi, {
+        style: args.sheetStyle,
+        orientation: args.sheetOrientation,
+      }),
     })),
 );
 server.registerTool(
