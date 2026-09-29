@@ -7,9 +7,26 @@ const SITE = 'https://portraitpass.vercel.app';
 const words = (text: string) => text.split(/\s+/).filter(Boolean).length;
 
 /** What each translated language must show. Add a row when a language is added. */
-const EXPECT: Record<Exclude<Locale, 'en'>, {
+// Partial while translators add rows in parallel; the loop below fails for any language without one.
+const EXPECT: Partial<Record<Exclude<Locale, 'en'>, {
   usH1: string; docsH1: string; faqStart: RegExp; independence: string; switcherName: string; studioNote: string;
-}> = {
+}>> = {
+  bn: {
+    usH1: 'মার্কিন পাসপোর্টের ছবি: মাপ ও নিয়ম',
+    docsH1: 'পাসপোর্ট, ভিসা ও পরিচয়পত্রের ছবির নিয়ম',
+    faqStart: /\?$/,
+    independence: 'কোনো সরকার বা পাসপোর্ট অফিসের সঙ্গে যুক্ত নয়',
+    switcherName: 'বাংলা',
+    studioNote: 'স্টুডিও আপাতত শুধু ইংরেজিতে আছে।',
+  },
+  hi: {
+    usH1: 'अमेरिकी पासपोर्ट फोटो: साइज़ और नियम',
+    docsH1: 'पासपोर्ट, वीज़ा और आईडी फोटो के नियम',
+    faqStart: /\?$/,
+    independence: 'किसी भी सरकार या पासपोर्ट कार्यालय से संबद्ध या समर्थित नहीं',
+    switcherName: 'हिन्दी',
+    studioNote: 'स्टूडियो फ़िलहाल अंग्रेज़ी में है।',
+  },
   es: {
     usH1: 'Foto de pasaporte de Estados Unidos: medidas y requisitos',
     docsH1: 'Requisitos de fotos para pasaporte, visa y documentos de identidad',
@@ -17,6 +34,30 @@ const EXPECT: Record<Exclude<Locale, 'en'>, {
     independence: 'sin afiliación ni respaldo de ningún gobierno ni oficina de pasaportes',
     switcherName: 'Español',
     studioNote: 'El editor está en inglés por ahora.',
+  },
+  pt: {
+    usH1: 'Foto de passaporte dos Estados Unidos: medidas e requisitos',
+    docsH1: 'Requisitos de fotos para passaporte, visto e documentos de identidade',
+    faqStart: /^Qual/,
+    independence: 'sem afiliação nem endosso de nenhum governo ou órgão de passaportes',
+    switcherName: 'Português',
+    studioNote: 'O estúdio está em inglês por enquanto.',
+  },
+  ur: {
+    usH1: 'امریکی پاسپورٹ کی تصویر: سائز اور قواعد',
+    docsH1: 'پاسپورٹ، ویزا اور شناختی تصویر کے تقاضے',
+    faqStart: /؟$/,
+    independence: 'کسی حکومت یا پاسپورٹ آفس سے کوئی وابستگی نہیں',
+    switcherName: 'اردو',
+    studioNote: 'اسٹوڈیو فی الحال انگریزی میں ہے۔',
+  },
+  ar: {
+    usH1: 'صورة جواز سفر الولايات المتحدة: المقاس والشروط',
+    docsH1: 'متطلبات صور جوازات السفر والتأشيرات والهويات',
+    faqStart: /^(?:ما|كم|هل|كيف|من)/,
+    independence: 'غير تابع لأي حكومة أو مكتب جوازات ولا يحظى بتأييده',
+    switcherName: 'العربية',
+    studioNote: 'المحرّر متاح بالإنجليزية حاليًا.',
   },
 };
 
@@ -31,7 +72,8 @@ const hreflangs = async (page: import('@playwright/test').Page) => {
 
 for (const code of TRANSLATED_LOCALES as Exclude<Locale, 'en'>[]) {
   const L = LOCALES[code];
-  const want = EXPECT[code];
+  const want = EXPECT[code]!;
+  test(`${code} has an EXPECT row`, () => expect(EXPECT[code], `add an EXPECT row for ${code}`).toBeTruthy());
   const p = (path: string) => `${L.prefix}${path}`;
 
   test.describe(`${code} pages`, () => {

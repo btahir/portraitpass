@@ -10,7 +10,7 @@
 // To add a language, see the checklist at the bottom of this file.
 import { DOCUMENTS } from "../core/documents";
 
-export type Locale = "en" | "es";
+export type Locale = "en" | "es" | "pt" | "hi" | "bn" | "ur" | "ar";
 export type TextDir = "ltr" | "rtl";
 
 export interface LocaleInfo {
@@ -67,6 +67,71 @@ export const LOCALES: Record<Locale, LocaleInfo> = {
     decimal: ",",
     thousands: ".",
     minGroupDigits: 5,
+  },
+  pt: {
+    code: "pt",
+    name: "Português",
+    englishName: "Portuguese",
+    dir: "ltr",
+    hreflang: "pt",
+    ogLocale: "pt_BR",
+    prefix: "/pt",
+    decimal: ",",
+    thousands: ".",
+    minGroupDigits: 4,
+  },
+  hi: {
+    code: "hi",
+    name: "हिन्दी",
+    englishName: "Hindi",
+    dir: "ltr",
+    hreflang: "hi",
+    ogLocale: "hi_IN",
+    prefix: "/hi",
+    decimal: ".",
+    thousands: ",",
+    minGroupDigits: 4,
+    fontStack: '"Noto Sans Devanagari", "Kohinoor Devanagari", "Nirmala UI", "Mukta", "Devanagari Sangam MN", sans-serif',
+  },
+  bn: {
+    code: "bn",
+    name: "বাংলা",
+    englishName: "Bengali",
+    dir: "ltr",
+    hreflang: "bn",
+    ogLocale: "bn_BD",
+    prefix: "/bn",
+    decimal: ".",
+    thousands: ",",
+    minGroupDigits: 4,
+    fontStack: '"Noto Sans Bengali", "Nirmala UI", "Kohinoor Bangla", "Bangla Sangam MN", "Vrinda", sans-serif',
+  },
+  ur: {
+    code: "ur",
+    name: "اردو",
+    englishName: "Urdu",
+    dir: "rtl",
+    hreflang: "ur",
+    ogLocale: "ur_PK",
+    prefix: "/ur",
+    decimal: ".",
+    thousands: ",",
+    minGroupDigits: 4,
+    fontStack:
+      '"Noto Nastaliq Urdu", "Jameel Noori Nastaleeq", "Urdu Typesetting", "Noto Naskh Arabic", "Geeza Pro", serif',
+  },
+  ar: {
+    code: "ar",
+    name: "العربية",
+    englishName: "Arabic",
+    dir: "rtl",
+    hreflang: "ar",
+    ogLocale: "ar_AR",
+    prefix: "/ar",
+    decimal: ".",
+    thousands: ",",
+    minGroupDigits: 4,
+    fontStack: '"Noto Naskh Arabic", "Noto Sans Arabic", "Geeza Pro", "Segoe UI", Tahoma, sans-serif',
   },
 };
 

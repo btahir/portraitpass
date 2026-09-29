@@ -16,6 +16,11 @@ const packs = new Map<Locale, LocalePack>();
 /** One dynamic import per translated language (add a line when adding a language). */
 const LOADERS: Record<Exclude<Locale, "en">, () => Promise<{ default: LocalePack }>> = {
   es: () => import("./locales/es"),
+  pt: () => import("./locales/pt"),
+  hi: () => import("./locales/hi"),
+  bn: () => import("./locales/bn"),
+  ur: () => import("./locales/ur"),
+  ar: () => import("./locales/ar"),
 };
 
 export async function loadLocale(locale: Locale): Promise<void> {

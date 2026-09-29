@@ -85,7 +85,13 @@ export function validateDocs(locale: Locale): string[] {
 
 /** Words that must not appear in translated copy (the English rule, in each language). */
 export const BANNED: Partial<Record<Locale, RegExp>> = {
+  bn: /(?<![\p{L}\p{M}])(অনুমোদ|অ্যাপ্রুভ|মঞ্জুর|নিশ্চয়তা|গ্যারান্টি|গ্যারান্টেড|শতভাগ|যাচাই|ভেরিফাই|প্রমাণিত|অফিসিয়াল|দাপ্তরিক|সরকারিভাবে|কমপ্লায়েন্ট|নিয়মসম্মত|নিয়মানুগ|মানসম্মত|সঙ্গতিপূর্ণ|নিয়ম মেনে চল)/u,
+  hi: /(?<![\p{L}\p{M}])(आधिकारिक|अधिकारिक|ऑफ़?िशियल|स्वीकृत|अनुमोदित|अप्रूव|गारंटी|गारण्टी|सत्यापित|सत्यापन|वेरिी?फ़?ाइड|कंप्लायंट|कम्प्लाइंट|अनुपालन|मान्य)/u,
   es: /(?<![\p{L}])(oficial|aprobad|garant|verificad|conforme|homologad)/iu,
+  pt: /(?<![\p{L}])(oficia[il]|aprovad|aprovaç|garant|verificad|verificaç|conforme(?![\p{L}])|homologad)/iu,
+  ur: /(?<![\p{L}\p{M}])(سرکار|منظور|منظوری|ضمانت|گارنٹی|تصدیق|مصدقہ|مستند|آفیشل|اوفیشل|کمپلائنٹ|اپروو)/u,
+  // Arabic has no capitals and glues prefixes (و ف ب ل ك ال) to words, so each stem is matched as a whole word with optional prefixes, endings and tashkeel. "غير رسمي" (unofficial) is allowed; «مضمون» alone is not banned because it also means "content", only «مضمونة» and the ضمان/نضمن family.
+  ar: new RegExp(`(?<!غير\\s)(?<![\\p{L}\\p{M}])(?:[وف]?(?:[بلك]?ال|لل|[بلك])?(?:${["رسمي", "أوفيشيال", "معتمد", "مضمونة", "مضمونا", "ضمان", "نضمن", "يضمن", "أضمن", "موثق", "مصدق", "تحققنا", "تم التحقق", "تم التأكد", "متحقق منه", "متحقق منها", "موافق عليه", "موافق عليها"].map((s) => s.split(" ").map((x) => [...x].join("\\p{M}*") + "\\p{M}*").join("\\s+")).join("|")})(?:(?:ة|ا|ين|ون|ات)\\p{M}*)?(?![\\p{L}\\p{M}])|(?:متوافق|مطابق|مستوف)(?:ة|ي|ية)?\\s+(?:مع\\s+(?:ال)?|لل?)(?:مواصفات|معايير|شروط|متطلبات|قواعد|لوائح|اشتراطات|قوانين))`, "u"),
 };
 
 /** Every locale that has pages. Convenience for scripts. */
