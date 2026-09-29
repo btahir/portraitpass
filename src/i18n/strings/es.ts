@@ -40,6 +40,7 @@ export const es: Strings = {
     terms: "Términos",
     accessibility: "Accesibilidad",
     forAgents: "Para agentes",
+    popular: "Populares",
     legal:
       "PortraitPass es un proyecto independiente de código abierto, sin afiliación ni respaldo de ningún gobierno ni oficina de pasaportes. Las reglas de las fotos cambian; consulta las reglas vigentes de la autoridad emisora. Algunas autoridades, como las de Canadá y Alemania, solo aceptan fotos de proveedores profesionales o certificados.",
     languageLabel: "Idioma",
@@ -253,6 +254,9 @@ export const es: Strings = {
     sourcesTitle: "Fuentes",
     faqTitle: "Preguntas frecuentes",
     relatedTitle: "Documentos relacionados",
+    guidesTitle: "Guías relacionadas",
+    reportBefore: "¿Encontraste un dato incorrecto o desactualizado?",
+    reportLink: "Abre una incidencia con el enlace de la fuente.",
     relSiblings: "Mismo documento, otra vía",
     relCountry: (country) => `Más documentos: ${country}`,
     relSameSize: (size) => `Otros documentos con una foto impresa de ${size}`,

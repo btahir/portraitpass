@@ -1,10 +1,12 @@
 import { ArrowDown, ArrowRight } from "lucide-react";
 import type { DocumentSpec } from "../../core/documents";
 import { DOCUMENTS } from "../../core/documents";
+import { ISSUES_URL } from "../../config";
 import { withLocale, type Locale } from "../../i18n";
 import { localizeDocument } from "../../i18n/localize";
 import { strings } from "../../i18n/strings";
 import { DocDiagram } from "./Diagram";
+import { guideLinksFor } from "./SizePages";
 import {
   DocLinks,
   FaqList,
@@ -128,6 +130,7 @@ export function DocumentPage({ doc, locale = "en" }: { doc: DocumentSpec; locale
   const sib = siblings(doc);
   const rel = related(doc).filter((d) => !sib.includes(d));
   const same = sameSize(doc);
+  const guides = guideLinksFor(doc);
   const atHome = canMakeAtHome(doc);
   const hasSpec = pr.length > 0 || dr.length > 0;
   const date = checkedDate(doc, locale);
@@ -200,11 +203,29 @@ export function DocumentPage({ doc, locale = "en" }: { doc: DocumentSpec; locale
       <Section title={t.sourcesTitle} id="sources">
         <Sources doc={doc} locale={locale} />
         {!hasSpec && <p>{rulesNote(locale)}</p>}
+        <p className="pg-note">
+          {t.reportBefore}{" "}
+          <a href={ISSUES_URL} target="_blank" rel="noreferrer" hrefLang="en">
+            {t.reportLink}
+          </a>
+        </p>
       </Section>
 
       <Section title={t.faqTitle} id="faq">
         <FaqList items={faq} />
       </Section>
+
+      {guides.length > 0 && (
+        <Section title={t.guidesTitle} id="guides">
+          <ul className="pg-links">
+            {guides.map((g) => (
+              <li key={g.path}>
+                <a href={withLocale(g.path, locale)}>{strings(locale).index.links[g.key]}</a>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
 
       {(sib.length > 0 || rel.length > 0 || same.length > 0) && (
         <Section title={t.relatedTitle} id="related">

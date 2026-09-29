@@ -39,6 +39,7 @@ export const pt: Strings = {
     terms: "Termos",
     accessibility: "Acessibilidade",
     forAgents: "Para agentes",
+    popular: "Populares",
     legal:
       "O PortraitPass é um projeto independente de código aberto, sem afiliação nem endosso de nenhum governo ou órgão de passaportes. As regras das fotos mudam; consulte as regras atuais da autoridade emissora. Algumas autoridades, como as do Canadá e da Alemanha, só aceitam fotos de fornecedores profissionais ou certificados.",
     languageLabel: "Idioma",
@@ -245,6 +246,9 @@ export const pt: Strings = {
     sourcesTitle: "Fontes",
     faqTitle: "Perguntas frequentes",
     relatedTitle: "Documentos relacionados",
+    guidesTitle: "Guias relacionados",
+    reportBefore: "Encontrou um dado errado ou desatualizado?",
+    reportLink: "Abra uma issue com o link da fonte.",
     relSiblings: "Mesmo documento, outro caminho",
     relCountry: (country) => `Mais documentos: ${country}`,
     relSameSize: (size) => `Outros documentos com foto impressa de ${size}`,

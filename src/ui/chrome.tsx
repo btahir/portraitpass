@@ -1,8 +1,13 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
 import { SUPPORT_URL } from "../config";
+import { getDocument } from "../core/documents";
 import { DEFAULT_LOCALE, LOCALES, localeOf, switchTargets, withLocale } from "../i18n";
+import { localizeDocument } from "../i18n/localize";
 import { strings } from "../i18n/strings";
+
+/** Documents linked from every footer: sitewide links to the pages people search for most. */
+const FOOTER_DOCS = ["us-passport", "uk-passport", "schengen-visa", "us-visa", "dv-lottery", "in-oci", "au-passport", "ca-visa"];
 
 /**
  * The app shell (App.tsx) renders the header and footer once around every route. A page that also
@@ -153,6 +158,21 @@ export function SiteFooter({ force = false, path = "/" }: { force?: boolean; pat
           <a href="/llms.txt" {...en}>
             {t.forAgents}
           </a>
+        </nav>
+        <nav className="footer-links footer-popular" aria-label={t.popular}>
+          <span>{t.popular}:</span>
+          {FOOTER_DOCS.map((id) => getDocument(id)).map(
+            (d) =>
+              d && (
+                <a key={d.id} href={withLocale(`/${d.id}-photo/`, locale)}>
+                  {localizeDocument(d, locale).name}
+                </a>
+              ),
+          )}
+          <a href={withLocale("/2x2-photo/", locale)}>{strings(locale).index.links.twoByTwo}</a>
+          <a href={withLocale("/35x45-photo/", locale)}>{strings(locale).index.links.thirtyFive}</a>
+          <a href={withLocale("/600x600-photo/", locale)}>{strings(locale).index.links.sixHundred}</a>
+          <a href={withLocale("/photo-under-50kb/", locale)}>{strings(locale).index.links.under50}</a>
         </nav>
         <nav className="footer-links footer-lang" aria-label={t.languageLabel}>
           <span>{t.languageLabel}:</span>

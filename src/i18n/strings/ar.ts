@@ -46,6 +46,7 @@ export const ar: Strings = {
     terms: "الشروط",
     accessibility: "إمكانية الوصول",
     forAgents: "للوكلاء الآليين",
+    popular: "الأكثر طلبًا",
     legal:
       "PortraitPass مشروع مستقل مفتوح المصدر، غير تابع لأي حكومة أو مكتب جوازات ولا يحظى بتأييده. تتغير قواعد الصور؛ راجع القواعد الحالية للجهة المصدرة. بعض الجهات، مثل كندا وألمانيا، لا تقبل إلا صور المزوّدين المحترفين أو المرخّصين.",
     languageLabel: "اللغة",
@@ -253,6 +254,9 @@ export const ar: Strings = {
     sourcesTitle: "المصادر",
     faqTitle: "أسئلة شائعة",
     relatedTitle: "وثائق ذات صلة",
+    guidesTitle: "أدلة ذات صلة",
+    reportBefore: "هل وجدت رقمًا خاطئًا أو قديمًا؟",
+    reportLink: "افتح بلاغًا (Issue) مع رابط المصدر.",
     relSiblings: "الوثيقة نفسها، بمسار آخر",
     relCountry: (country) => `المزيد من وثائق ${country}`,
     relSameSize: (size) => `وثائق أخرى بصورة مطبوعة مقاس ${size}`,

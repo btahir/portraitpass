@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { DOCUMENTS } from '../../src/core/documents';
 
 const SITE = 'https://portraitpass.vercel.app';
@@ -13,16 +14,40 @@ function headOf(html: string) {
   return { title, description, canonical, ldBlocks };
 }
 
+/** The sitemap index and every child sitemap it lists: their <url> blocks. */
+async function sitemapEntries(request: import('@playwright/test').APIRequestContext) {
+  const index = await (await request.get('/sitemap.xml')).text();
+  expect(index, 'sitemap.xml is a sitemap index').toContain('<sitemapindex');
+  const children = [...index.matchAll(/<sitemap><loc>([^<]+)<\/loc><lastmod>([^<]*)<\/lastmod><\/sitemap>/g)];
+  expect(children.length, 'one sitemap per language').toBe(7);
+  const entries: { path: string; lastmod: string; block: string }[] = [];
+  for (const [, loc, lastmod] of children) {
+    expect(loc.startsWith(SITE)).toBe(true);
+    expect(lastmod, `${loc} lastmod`).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    const res = await request.get(loc.slice(SITE.length));
+    expect(res.status(), loc).toBe(200);
+    const xml = await res.text();
+    for (const m of xml.matchAll(/<url>(.*?)<\/url>/gs)) {
+      const path = /<loc>([^<]+)<\/loc>/.exec(m[1])![1].slice(SITE.length);
+      const mod = /<lastmod>([^<]*)<\/lastmod>/.exec(m[1])?.[1] ?? '';
+      expect(mod, `${path} lastmod`).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      entries.push({ path, lastmod: mod, block: m[1] });
+    }
+  }
+  return entries;
+}
+const section = (page: import('@playwright/test').Page, id: string) => page.locator('section', { has: page.locator(`h2#${id}`) });
+const ldTypes = (blocks: { '@type': string }[]) => blocks.map((b) => b['@type']);
+
 test.describe('static pages', () => {
   test('every sitemap URL returns a prerendered page with a unique title', async ({ request }) => {
-    const sitemap = await (await request.get('/sitemap.xml')).text();
-    const paths = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => {
-      expect(m[1].startsWith(SITE)).toBe(true);
-      return m[1].slice(SITE.length);
-    });
+    const paths = (await sitemapEntries(request)).map((e) => e.path);
     expect(paths.length).toBeGreaterThanOrEqual(DOCUMENTS.length + 10);
     expect(new Set(paths).size).toBe(paths.length);
-    for (const path of ['/', '/studio/', '/about/', '/support/', '/privacy/', '/terms/', '/accessibility/', '/documents/',
+    // /studio/ (an empty app shell) and /support/ (a tip page) are noindex, so they are not listed.
+    expect(paths).not.toContain('/studio/');
+    expect(paths).not.toContain('/support/');
+    for (const path of ['/', '/about/', '/privacy/', '/terms/', '/accessibility/', '/documents/',
       '/us-passport-photo/', '/uk-passport-photo/', '/35x45-photo/', '/passport-photo-print-sheet/',
       '/2x2-photo/', '/600x600-photo/', '/photo-under-50kb/', '/print-passport-photos/']) {
       expect(paths, path).toContain(path);
@@ -46,13 +71,117 @@ test.describe('static pages', () => {
       expect(head.canonical, path).toBe(`${SITE}${path}`);
       expect(html, path).toContain('property="og:title"');
       expect(html, path).toContain('name="twitter:card"');
-      if (path !== '/studio/') expect(html, `${path} has an h1`).toContain('<h1');
+      expect(html, `${path} has an h1`).toContain('<h1');
+      expect(html, path).toMatch(/<meta name="robots" content="index,follow,max-image-preview:large/);
+      // a social card that exists, at an absolute URL, with alt text
+      const image = /<meta property="og:image" content="([^"]*)"/.exec(html)?.[1] ?? '';
+      expect(image.startsWith(`${SITE}/og`), `${path} og:image ${image}`).toBe(true);
+      expect(html, path).toContain('property="og:image:alt"');
+      expect(html, path).toContain('name="twitter:image:alt"');
     }
   });
 
-  test('robots.txt points at the sitemap', async ({ request }) => {
+  test('robots.txt allows crawlers, AI assistants included, and points at the sitemap', async ({ request }) => {
     const robots = await (await request.get('/robots.txt')).text();
     expect(robots).toContain(`Sitemap: ${SITE}/sitemap.xml`);
+    expect(robots).not.toMatch(/^Disallow:\s*\/\s*$/m);
+    for (const bot of ['GPTBot', 'OAI-SearchBot', 'ChatGPT-User', 'ClaudeBot', 'Claude-SearchBot', 'PerplexityBot', 'Google-Extended'])
+      expect(robots, bot).toMatch(new RegExp(`User-agent: ${bot}\\nAllow: /`));
+  });
+
+  test('social cards exist for documents and size pages', async ({ request }) => {
+    for (const path of ['/og.png', '/og/us-passport.png', '/og/de-passport.png', '/og/2x2-photo.png', '/og/documents.png']) {
+      const res = await request.get(path);
+      expect(res.status(), path).toBe(200);
+      expect(res.headers()['content-type'], path).toContain('image/png');
+      expect((await res.body()).byteLength, path).toBeGreaterThan(5000);
+    }
+    const es = await (await request.get('/es/us-passport-photo/')).text();
+    expect(es).toContain(`<meta property="og:image" content="${SITE}/og/us-passport.png"/>`);
+  });
+
+  test('the IndexNow key file is served and matches the script', async ({ request }) => {
+    const key = /const KEY = "([0-9a-f]{32})"/.exec(readFileSync(new URL('../../scripts/indexnow.ts', import.meta.url), 'utf8'))?.[1];
+    expect(key).toBeTruthy();
+    const res = await request.get(`/${key}.txt`);
+    expect(res.status()).toBe(200);
+    expect((await res.text()).trim()).toBe(key);
+  });
+
+  test('utility pages are noindex and not in the sitemap; the 404 page is noindex', async ({ request }) => {
+    for (const path of ['/studio/', '/support/']) {
+      const html = await (await request.get(path)).text();
+      expect(html, path).toContain('<meta name="robots" content="noindex,follow"/>');
+      expect(html, path).toContain(`<link rel="canonical" href="${SITE}${path}"/>`);
+    }
+    // Vercel serves 404.html (with a 404 status) for unknown addresses; the preview server cannot, so read the file.
+    expect(await (await request.get('/404.html')).text()).toContain('<meta name="robots" content="noindex"/>');
+  });
+
+  test('sitemap lastmod is the dataset check date, not the build date', async ({ request }) => {
+    const checks = DOCUMENTS.flatMap((d) => d.sources.map((s) => s.checkedAt)).sort();
+    const entries = await sitemapEntries(request);
+    const us = entries.find((e) => e.path === '/us-passport-photo/')!;
+    const doc = DOCUMENTS.find((d) => d.id === 'us-passport')!;
+    expect(us.lastmod).toBe(doc.sources.map((s) => s.checkedAt).sort().pop());
+    expect(entries.find((e) => e.path === '/es/us-passport-photo/')!.lastmod).toBe(us.lastmod);
+    expect(entries.every((e) => e.lastmod <= checks[checks.length - 1] || e.path.match(/^\/(about|privacy|terms|accessibility)\//))).toBe(true);
+  });
+
+  test('structured data: home, documents index (dataset) and document pages', async ({ request }) => {
+    const blocks = async (path: string) => headOf(await (await request.get(path)).text()).ldBlocks;
+    const home = await blocks('/');
+    expect(ldTypes(home).sort()).toEqual(['Organization', 'WebApplication', 'WebSite']);
+    const app = home.find((b) => b['@type'] === 'WebApplication');
+    expect(app.offers).toMatchObject({ price: '0', priceCurrency: 'USD' });
+    expect(app.aggregateRating, 'no invented ratings').toBeUndefined();
+    const site = home.find((b) => b['@type'] === 'WebSite');
+    expect(site.name).toBe('PortraitPass');
+    expect(site.url).toBe(`${SITE}/`);
+
+    const docs = await blocks('/documents/');
+    const dataset = docs.find((b) => b['@type'] === 'Dataset');
+    expect(dataset.name).toBeTruthy();
+    expect(dataset.description.length).toBeGreaterThanOrEqual(50);
+    expect(dataset.license).toContain('mit');
+    const download = dataset.distribution[0].contentUrl as string;
+    const json = await request.get(download.slice(SITE.length));
+    expect(json.status()).toBe(200);
+    expect((await json.json()).documents.length).toBe(DOCUMENTS.length);
+
+    const us = await blocks('/us-passport-photo/');
+    expect(ldTypes(us).sort()).toEqual(['BreadcrumbList', 'FAQPage', 'WebPage']);
+    const page = us.find((b) => b['@type'] === 'WebPage');
+    expect(page.dateModified).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(page.isBasedOn.map((s: { url: string }) => s.url)).toEqual(DOCUMENTS.find((d) => d.id === 'us-passport')!.sources.map((s) => s.url));
+  });
+
+  test('document titles carry the query words and never promise a maker for a not-DIY document', async ({ request }) => {
+    const title = async (path: string) => headOf(await (await request.get(path)).text()).title;
+    expect(await title('/us-passport-photo/')).toBe('US passport photo size and requirements — free maker');
+    for (const doc of DOCUMENTS) {
+      const t = await title(docPath(doc.id));
+      expect([...t].length, `${doc.id} title`).toBeLessThanOrEqual(60);
+      if (doc.diy === 'no') expect(t, doc.id).not.toMatch(/free maker/i);
+      expect(t, doc.id).not.toMatch(/\bphoto photo\b/i);
+    }
+  });
+
+  test('document pages link to their size guides; the footer links the popular pages', async ({ page }) => {
+    await page.goto('/us-passport-photo/');
+    await expect(section(page, 'guides').locator('a[href="/2x2-photo/"]')).toBeVisible();
+    await expect(section(page, 'guides').locator('a[href="/print-passport-photos/"]')).toBeVisible();
+    await page.goto('/uk-passport-photo/');
+    await expect(section(page, 'guides').locator('a[href="/35x45-photo/"]')).toBeVisible();
+    for (const path of ['/', '/about/', '/es/documents/']) {
+      await page.goto(path);
+      const prefix = path.startsWith('/es/') ? '/es' : '';
+      await expect(page.locator(`footer a[href="${prefix}/us-passport-photo/"]`), path).toBeVisible();
+      await expect(page.locator(`footer a[href="${prefix}/2x2-photo/"]`), path).toBeVisible();
+    }
+    // a way to correct a wrong number
+    await page.goto('/us-passport-photo/');
+    await expect(section(page, 'sources').getByRole('link', { name: /issue/i })).toHaveAttribute('href', /github\.com\/btahir\/portraitpass\/issues/);
   });
 
   for (const id of ['dv-lottery', 'in-oci', 'schengen-visa', 'ca-passport', 'de-passport']) {

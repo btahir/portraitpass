@@ -165,8 +165,17 @@ export function fmtDate(iso: string, L: Locale = "en"): string {
   return nd(T(L).fmt.date(y, m, d), L);
 }
 export function checkedDate(doc: DocumentSpec, L: Locale = "en"): string {
+  const iso = checkedIso(doc);
+  return iso ? fmtDate(iso, L) : "";
+}
+/** The most recent source check for a document, YYYY-MM-DD ("" when it has no sources). */
+export function checkedIso(doc: DocumentSpec): string {
   const dates = doc.sources.map((s) => s.checkedAt).sort();
-  return dates.length ? fmtDate(dates[dates.length - 1], L) : "";
+  return dates.length ? dates[dates.length - 1] : "";
+}
+/** The most recent source check across a set of documents (the sitemap lastmod of a hub page). */
+export function latestCheck(docs: DocumentSpec[]): string {
+  return docs.map(checkedIso).filter(Boolean).sort().pop() ?? "";
 }
 
 // ------------------------------------------------------------ document data
@@ -373,8 +382,12 @@ export function documentMeta(doc: DocumentSpec, L: Locale = "en") {
   const ld = localizeDocument(doc, L);
   const photo = photoName(doc, L);
   const short = t.fmt.photoName(ld.name.replace(/\s*\([^)]*\)/g, "").trim());
-  const candidates = t.meta.docTitles(photo, short, t.meta.brand);
-  const title = candidates.find((c) => c.length <= 60) ?? candidates[3];
+  const offer = doc.diy !== "no" ? "maker" : doc.print || doc.digital ? "size" : "none";
+  const candidates = t.meta.docTitles(photo, short, t.meta.brand, offer);
+  // Nothing fits: take the shortest candidate rather than one that is cut off in results.
+  const title =
+    candidates.find((c) => [...c].length <= 60) ??
+    [...candidates].sort((a, b) => [...a].length - [...b].length)[0];
   const p = doc.print;
   const head = p ? compactMm(p.headMinMm, p.headMaxMm, L) : undefined;
   const hasSpec = !!(p || doc.digital);

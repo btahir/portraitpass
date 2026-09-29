@@ -576,7 +576,8 @@ p {
   .footer-links {
     gap: 0 22px;
   }
-  .site-footer .footer-lang > span {
+  .site-footer .footer-lang > span,
+  .site-footer .footer-popular > span {
     display: inline-flex;
     align-items: center;
     min-height: 44px;

@@ -44,6 +44,17 @@ const names = (docs: DocumentSpec[], L: Locale, n = 4) => {
     ? shown.join(strings(L).fmt.sep) + strings(L).fmt.andMore(docs.length - n)
     : listWords(shown, "and", L);
 };
+/** Which size and guide pages apply to a document, for links from its own page. */
+export function guideLinksFor(doc: DocumentSpec): { path: string; key: "twoByTwo" | "thirtyFive" | "sixHundred" | "under50" | "printing" }[] {
+  const out: ReturnType<typeof guideLinksFor> = [];
+  if (nearPrint(doc, 50.8, 50.8, 1)) out.push({ path: "/2x2-photo/", key: "twoByTwo" });
+  if (nearPrint(doc, 35, 45)) out.push({ path: "/35x45-photo/", key: "thirtyFive" });
+  if (exact600(doc) || accepts600(doc)) out.push({ path: "/600x600-photo/", key: "sixHundred" });
+  const d = doc.digital;
+  if (d && (d.maxKB !== undefined || d.minKB !== undefined)) out.push({ path: "/photo-under-50kb/", key: "under50" });
+  if (doc.print && doc.diy !== "no") out.push({ path: "/print-passport-photos/", key: "printing" });
+  return out;
+}
 function sheetCount(w: number, h: number, paper: "4x6" | "a4" | "letter") {
   const row = sheetRows().find(
     (r) => Math.abs(r.doc.print!.widthMm - w) < 0.6 && Math.abs(r.doc.print!.heightMm - h) < 0.6,

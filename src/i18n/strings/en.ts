@@ -31,6 +31,7 @@ export const en = {
     terms: "Terms",
     accessibility: "Accessibility",
     forAgents: "For agents",
+    popular: "Popular",
     legal: `${DISCLAIMER} Some authorities, such as Canada and Germany, only accept photos from professional or certified providers.`,
     languageLabel: "Language",
     /** Shown in the footer of translated pages; empty in English. */
@@ -78,7 +79,7 @@ export const en = {
     rulesNote: "Rules change. Check the issuing authority’s current instructions before you apply.",
     notAtHome: "Not at home",
     /** "US passport" becomes "US passport photo"; a name that already ends in "photo" stays. */
-    photoName: (name: string): string => (/\bphoto$/i.test(name) ? name : `${name} photo`),
+    photoName: (name: string): string => (/\bphoto\)?$/i.test(name) ? name : `${name} photo`),
     andMore: (n: number): string => ` and ${n} more`,
     /** Separators for lists and sentences built in code: comma, semicolon, full stop. */
     sep: ", ",
@@ -136,13 +137,22 @@ export const en = {
   // ------------------------------------------------------------ page meta
   meta: {
     brand: "PortraitPass",
-    docTitles: (photo: string, short: string, brand: string): string[] => [
-      `${photo} size and rules — ${brand}`,
-      `${photo} size and rules`,
-      `${short} size and rules — ${brand}`,
-      `${short} size and rules`,
-      `${short} size`,
-    ],
+    /**
+     * Title candidates, best first; the first one of at most 60 characters wins and index 3 is the
+     * fallback. `offer` is what the page can honestly promise: a free maker (a home photo), a size
+     * (numbers to read, but not a home photo) or neither.
+     */
+    docTitles: (photo: string, short: string, brand: string, offer: "maker" | "size" | "none" = "size"): string[] => {
+      const what = offer === "none" ? "requirements" : "size and requirements";
+      const tail = offer === "maker" ? " — free maker" : "";
+      return [
+        `${photo} ${what}${tail}`,
+        `${photo} ${what} — ${brand}`,
+        `${photo} ${what}`,
+        `${short} ${what}`,
+        `${short} ${offer === "none" ? "rules" : "size"}`,
+      ];
+    },
     docNoSize: (photo: string): string => `${photo}: there is no size to prepare.`,
     docSpec: (photo: string, summary: string, head: string | undefined): string =>
       `${photo}: ${summary}${head ? `, head ${head}` : ""}.`,
@@ -248,6 +258,9 @@ export const en = {
     sourcesTitle: "Sources",
     faqTitle: "Common questions",
     relatedTitle: "Related documents",
+    guidesTitle: "Guides for this photo",
+    reportBefore: "Found a wrong or outdated number?",
+    reportLink: "Open an issue with the source link.",
     relSiblings: "Same document, other route",
     relCountry: (country: string): string => `More from ${country}`,
     relSameSize: (size: string): string => `Other documents with a ${size} print`,
@@ -299,7 +312,7 @@ export const en = {
     twoByTwo: {
       crumb: "2×2 inch photo",
       title: "2×2 inch photo: size, pixels and documents",
-      metaTitle: "2×2 inch photo: size, pixels and documents — PortraitPass",
+      metaTitle: "2×2 inch photo size in pixels: 600×600 at 300 DPI, 50.8 mm",
       metaLead: (px: string): string => `2×2 inch photo: 50.8 mm, ${px} px at 300 DPI.`,
       metaDocs: (n: number, lead: string): string => `${n} documents use it, including ${lead}.`,
       metaLeadFallback: "the US passport",
@@ -333,7 +346,7 @@ export const en = {
     thirtyFive: {
       crumb: "35×45 mm photo",
       title: "35×45 mm photo: size, pixels and documents",
-      metaTitle: "35×45 mm photo: size, pixels and documents — PortraitPass",
+      metaTitle: "35×45 mm photo size in pixels: 413×531 at 300 DPI",
       metaLead: (px: string): string => `35×45 mm photo: ${px} px at 300 DPI.`,
       metaDocs: (n: number, c: number): string =>
         `${n} documents in ${c} countries use it, with each head range and background rule.`,
@@ -367,7 +380,7 @@ export const en = {
       title: "600×600 pixel photo: uploads and size limits",
       metaTitle: "600×600 pixel photo: uploads and size limits — PortraitPass",
       metaLead: (exact: number, range: number): string =>
-        `600×600 pixel photo: ${exact} documents ask for exactly this size, ${range} accept it within a range.`,
+        `600×600 pixel photo: ${exact} ${exact === 1 ? "document asks" : "documents ask"} for exactly this size, ${range} ${range === 1 ? "accepts" : "accept"} it within a range.`,
       metaTail: "File size limits, head position and a free browser tool.",
       metaFiller: "Nothing is uploaded.",
       lede: (exact: number, range: number): string =>
@@ -400,7 +413,7 @@ export const en = {
       title: "Photo under 50 KB: which documents set a limit",
       metaTitle: "Photo under 50 KB: documents with a limit — PortraitPass",
       metaLead: (n: number, smallest: string): string =>
-        `Photo under 50 KB? ${n} documents set a file size limit; the smallest maximum we found is ${smallest} KB.`,
+        `Photo under 50 KB? ${n} ${n === 1 ? "document sets" : "documents set"} a file size limit; the smallest maximum we found is ${smallest} KB.`,
       metaNone: "n/a",
       metaTail: "How KB is counted and how to reduce file size.",
       metaFiller: "Free, in your browser.",

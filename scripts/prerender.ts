@@ -1,12 +1,16 @@
-// Prerenders every static route to dist/<path>/index.html, plus sitemap.xml and
-// robots.txt. Run after `vite build`. Set OUT_DIR to build into another folder.
+// Prerenders every static route to dist/<path>/index.html, plus the sitemap index and one sitemap
+// per language, robots.txt, the social cards (dist/og/) and the open dataset (dist/data/). Run after
+// `vite build`. Set OUT_DIR to build into another folder.
+// Optional env: GOOGLE_SITE_VERIFICATION and BING_SITE_VERIFICATION (the meta tag values) add
+// ownership meta tags to the home page; a verification file in public/ works as well.
 import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { createServer } from "vite";
+import sharp from "sharp";
 import { renderToString } from "react-dom/server";
 import { createElement } from "react";
-import { SITE_NAME, SITE_URL } from "../src/config";
-import { LOCALES, TRANSLATED_LOCALES, localeOf } from "../src/i18n";
+import { REPO_URL, SITE_NAME, SITE_URL, DISCLAIMER } from "../src/config";
+import { LOCALES, LOCALE_CODES, TRANSLATED_LOCALES, localeOf } from "../src/i18n";
 
 const OUT_DIR = resolve(process.env.OUT_DIR || "dist");
 
@@ -78,6 +82,20 @@ try {
   const paths: string[] = staticRoutes();
   const titles = new Map<string, string>();
   const alternatesByPath = new Map<string, { hreflang: string; href: string }[]>();
+  const lastmodByPath = new Map<string, string | undefined>();
+  const indexable: string[] = [];
+  const cardFiles = new Set<string>();
+
+  // Social cards: one PNG per document and per size or guide page (see scripts/lib/og-cards.ts).
+  const { ogCards } = await server.ssrLoadModule("/scripts/lib/og-cards.ts");
+  await mkdir(resolve(OUT_DIR, "og"), { recursive: true });
+  for (const card of ogCards() as { slug: string; svg: string }[]) {
+    await sharp(Buffer.from(card.svg), { density: 96 })
+      .resize(1200, 630)
+      .png({ palette: true, compressionLevel: 9 })
+      .toFile(resolve(OUT_DIR, "og", `${card.slug}.png`));
+    cardFiles.add(`${SITE_URL}/og/${card.slug}.png`);
+  }
 
   for (const path of paths) {
     const meta = routeMeta(path);
@@ -94,6 +112,10 @@ try {
       if (hit) throw new Error(`Banned claim "${hit[0]}" on ${path}`);
     }
     alternatesByPath.set(path, meta.alternates);
+    lastmodByPath.set(path, meta.lastmod);
+    if (!meta.noindex) indexable.push(path);
+    if (meta.ogImage !== `${SITE_URL}/og.png` && !cardFiles.has(meta.ogImage))
+      throw new Error(`${path}: social card ${meta.ogImage} was not generated`);
     if (meta.lang !== LOCALES[locale].hreflang) throw new Error(`Wrong lang for ${path}`);
     const clash = titles.get(meta.title);
     if (clash) throw new Error(`Duplicate title "${meta.title}" on ${clash} and ${path}`);
@@ -102,7 +124,17 @@ try {
     const title = escapeHtml(meta.title);
     const description = escapeHtml(meta.description);
     const url = escapeHtml(meta.canonical);
-    const image = `${SITE_URL}/og.png`;
+    const image = escapeHtml(meta.ogImage);
+    const imageAlt = escapeHtml(meta.ogImageAlt);
+    const verification =
+      path === "/"
+        ? [
+            process.env.GOOGLE_SITE_VERIFICATION &&
+              `<meta name="google-site-verification" content="${escapeHtml(process.env.GOOGLE_SITE_VERIFICATION)}"/>`,
+            process.env.BING_SITE_VERIFICATION &&
+              `<meta name="msvalidate.01" content="${escapeHtml(process.env.BING_SITE_VERIFICATION)}"/>`,
+          ].filter(Boolean)
+        : [];
     const alternates = meta.alternates.map(
       (a: { hreflang: string; href: string }) =>
         `<link rel="alternate" hreflang="${escapeHtml(a.hreflang)}" href="${escapeHtml(a.href)}"/>`,
@@ -111,7 +143,11 @@ try {
     const head = [
       `<title>${title}</title>`,
       `<meta name="description" content="${description}"/>`,
+      meta.noindex
+        ? `<meta name="robots" content="noindex,follow"/>`
+        : `<meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1"/>`,
       `<link rel="canonical" href="${url}"/>`,
+      ...verification,
       ...alternates,
       ...(locale !== "en" && packChunk(locale)
         ? [`<link rel="modulepreload" crossorigin href="/assets/${packChunk(locale)}"/>`]
@@ -130,10 +166,13 @@ try {
       `<meta property="og:image" content="${image}"/>`,
       `<meta property="og:image:width" content="1200"/>`,
       `<meta property="og:image:height" content="630"/>`,
+      `<meta property="og:image:type" content="image/png"/>`,
+      `<meta property="og:image:alt" content="${imageAlt}"/>`,
       `<meta name="twitter:card" content="summary_large_image"/>`,
       `<meta name="twitter:title" content="${title}"/>`,
       `<meta name="twitter:description" content="${description}"/>`,
       `<meta name="twitter:image" content="${image}"/>`,
+      `<meta name="twitter:image:alt" content="${imageAlt}"/>`,
       ...(meta.jsonLd ?? []).map(
         (block: object) =>
           `<script type="application/ld+json">${jsonForScript(block)}</script>`,
@@ -172,25 +211,96 @@ try {
         throw new Error(`${path}: ${target} does not link back (hreflang)`);
     }
   }
+  // ---- sitemaps: one index, one file per language. lastmod is the dataset check date (or the legal
+  // update date), never the build date. Pages marked noindex are left out.
+  const langOf = (p: string) => localeOf(p);
+  const urlEntry = (p: string) => {
+    const lastmod = lastmodByPath.get(p);
+    return `<url><loc>${escapeXml(SITE_URL + p)}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ""}${(
+      alternatesByPath.get(p) ?? []
+    )
+      .map(
+        (a) =>
+          `<xhtml:link rel="alternate" hreflang="${escapeXml(a.hreflang)}" href="${escapeXml(a.href)}"/>`,
+      )
+      .join("")}</url>`;
+  };
+  const indexEntries: string[] = [];
+  for (const code of LOCALE_CODES) {
+    const list = indexable.filter((p) => langOf(p) === code);
+    if (!list.length) continue;
+    const newest = list.map((p) => lastmodByPath.get(p) ?? "").sort().pop();
+    await writeFile(
+      resolve(OUT_DIR, `sitemap-${code}.xml`),
+      `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">${list.map(urlEntry).join("")}</urlset>\n`,
+    );
+    indexEntries.push(
+      `<sitemap><loc>${SITE_URL}/sitemap-${code}.xml</loc>${newest ? `<lastmod>${newest}</lastmod>` : ""}</sitemap>`,
+    );
+  }
   await writeFile(
     resolve(OUT_DIR, "sitemap.xml"),
-    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">${paths
-      .map(
-        (p) =>
-          `<url><loc>${escapeXml(SITE_URL + p)}</loc>${(alternatesByPath.get(p) ?? [])
-            .map(
-              (a) =>
-                `<xhtml:link rel="alternate" hreflang="${escapeXml(a.hreflang)}" href="${escapeXml(a.href)}"/>`,
-            )
-            .join("")}</url>`,
-      )
-      .join("")}</urlset>\n`,
+    `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${indexEntries.join("")}</sitemapindex>\n`,
   );
+
+  // ---- robots.txt: everything public is open to crawlers, AI search and assistant bots included
+  // (the owner wants to be found and cited). Named groups replace "*" for those bots, so each one
+  // repeats Allow. Crawlers must be able to fetch noindex pages to see the tag, so nothing is disallowed.
+  const AI_BOTS = [
+    "GPTBot",
+    "OAI-SearchBot",
+    "ChatGPT-User",
+    "ClaudeBot",
+    "Claude-SearchBot",
+    "Claude-User",
+    "PerplexityBot",
+    "Perplexity-User",
+    "Google-Extended",
+    "Applebot",
+    "Applebot-Extended",
+    "DuckAssistBot",
+    "Amazonbot",
+    "meta-externalagent",
+    "MistralAI-User",
+    "CCBot",
+  ];
   await writeFile(
     resolve(OUT_DIR, "robots.txt"),
-    `User-agent: *\nAllow: /\nSitemap: ${SITE_URL}/sitemap.xml\n`,
+    [
+      `# ${SITE_NAME}: free, open source and public. Search engines and AI assistants are welcome.`,
+      `# Agent guide: ${SITE_URL}/llms.txt   Dataset: ${SITE_URL}/data/documents.json`,
+      "",
+      "User-agent: *",
+      "Allow: /",
+      "",
+      ...AI_BOTS.flatMap((bot) => [`User-agent: ${bot}`, "Allow: /", ""]),
+      `Sitemap: ${SITE_URL}/sitemap.xml`,
+      "",
+    ].join("\n"),
   );
-  console.log(`Prerendered ${paths.length} pages into ${OUT_DIR}.`);
+
+  // ---- the open dataset behind the pages, served as JSON (linked from the Dataset markup on /documents/)
+  const { DOCUMENTS } = await server.ssrLoadModule("/src/core/documents.ts");
+  const checks: string[] = DOCUMENTS.flatMap((d: { sources: { checkedAt: string }[] }) => d.sources.map((x) => x.checkedAt)).sort();
+  await mkdir(resolve(OUT_DIR, "data"), { recursive: true });
+  await writeFile(
+    resolve(OUT_DIR, "data", "documents.json"),
+    JSON.stringify(
+      {
+        name: "PortraitPass passport, visa and ID photo requirements",
+        license: "MIT",
+        licenseUrl: "https://opensource.org/license/mit",
+        homepage: `${SITE_URL}/documents/`,
+        repository: REPO_URL,
+        lastChecked: checks[checks.length - 1],
+        note: `${DISCLAIMER} Every entry cites the issuing authority's page and the date it was checked; re-check the source before relying on a number.`,
+        documents: DOCUMENTS,
+      },
+      null,
+      1,
+    ) + "\n",
+  );
+  console.log(`Prerendered ${paths.length} pages (${indexable.length} indexable) into ${OUT_DIR}.`);
 } finally {
   await server.close();
 }

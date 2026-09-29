@@ -233,10 +233,14 @@ for (const code of TRANSLATED_LOCALES as Exclude<Locale, 'en'>[]) {
     });
 
     test('every localized sitemap URL is a complete, self-canonical page with reciprocal hreflang', async ({ request }) => {
-      const sitemap = await (await request.get('/sitemap.xml')).text();
+      // one sitemap per language, listed in the sitemap index
+      const index = await (await request.get('/sitemap.xml')).text();
+      expect(index).toContain(`<loc>${SITE}/sitemap-${code}.xml</loc>`);
+      const sitemap = await (await request.get(`/sitemap-${code}.xml`)).text();
       expect(sitemap).toContain('xmlns:xhtml="http://www.w3.org/1999/xhtml"');
       const urls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1].slice(SITE.length));
       const local = urls.filter((u) => u.startsWith(`${L.prefix}/`));
+      expect(local.length, 'the language sitemap lists only its own language').toBe(urls.length);
       // documents + index + 6 size pages
       expect(local.length).toBe(DOCUMENTS.length + 1 + 6);
       const titles = new Set<string>();
