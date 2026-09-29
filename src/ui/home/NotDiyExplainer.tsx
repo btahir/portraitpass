@@ -1,4 +1,4 @@
-import type { DocumentSpec } from "../../core/index";
+import { DOCUMENTS, type DocumentSpec } from "../../core/index";
 import { digitalLabel, docPagePath, formatChecked, printSizeLabel } from "./docInfo";
 import "./home.css";
 
@@ -13,6 +13,8 @@ export interface NotDiyExplainerProps {
   /** Heading level of the title (default 2). */
   headingLevel?: 2 | 3;
 }
+
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
 function mmRange(min?: number, max?: number): string | undefined {
   if (min === undefined && max === undefined) return undefined;
@@ -62,6 +64,7 @@ export function NotDiyExplainer({
     </a>
   );
   const titleId = `nd-${doc.id}`;
+  const atHome = DOCUMENTS.some((d) => d.country === doc.country && d.diy !== "no");
 
   if (compact) {
     return (
@@ -90,9 +93,9 @@ export function NotDiyExplainer({
       <div className="nd-block">
         <h3>What to do instead</h3>
         <p>
-          Ask the issuing office, or read its page linked under Sources, which
-          photographers or booths it takes and what to bring. Rules change, so
-          check before you go.
+          Ask the issuing office which photographers or booths it takes, and
+          take the numbers below with you. PortraitPass does not make this
+          photo, because a print or file made at home would be turned away.
         </p>
       </div>
 
@@ -140,7 +143,14 @@ export function NotDiyExplainer({
         </div>
       )}
 
-      <p className="nd-links">{pick}</p>
+      <p className="nd-links">
+        {atHome && (
+          <a className="nd-link" href={`/documents/#${slug(doc.country)}`}>
+            Documents from {doc.country} you can prepare yourself
+          </a>
+        )}
+        {pick}
+      </p>
     </section>
   );
 }

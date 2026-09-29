@@ -376,10 +376,17 @@ export function CameraCapture({ preset, onCapture, onClose }: CameraCaptureProps
   );
 
   const showStage = phase === "starting" || phase === "live" || phase === "review";
+  // Until one face is found the other rows only say "waiting", so they fold into the face line.
+  const visibleHints =
+    live?.status === "ready"
+      ? live.hints.every((hint) => hint.id === "face" || hint.state === "idle")
+        ? live.hints.filter((hint) => hint.id === "face")
+        : live.hints
+      : [];
   const hintList =
-    hintsOn && live?.status === "ready" && live.hints.length ? (
+    hintsOn && live?.status === "ready" && visibleHints.length ? (
       <ul className="cc-hints">
-        {live.hints.map((hint) => (
+        {visibleHints.map((hint) => (
           <li key={hint.id} className={`cc-hint is-${hint.state}`}>
             <HintIcon state={hint.state} />
             <span>

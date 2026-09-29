@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ExternalLink } from "lucide-react";
+import { ChevronDown, ExternalLink } from "lucide-react";
 import type { DocumentSpec, Preset } from "../../core/index";
 import { DocumentPicker } from "../home/DocumentPicker";
 import { digitalLabel, printSizeLabel } from "../home/docInfo";
@@ -61,13 +61,17 @@ export function DocumentCard({
   headingLevel?: 2 | 3;
 }) {
   const [open, setOpen] = useState(false);
-  // On a phone the numbers fold away behind one line so the photo comes first.
+  // Below the desktop layout the numbers fold away behind one line so the photo comes first.
   const [more, setMore] = useState(false);
+  // The custom-size fields are how a general photo gets its size, so they never fold away.
+  const pinned = preset.mode === "general";
   const rows = documentRows(doc, preset);
   const brief = rows
     .filter(([term]) => ["Photo size", "Upload", "Head"].includes(term))
     .slice(0, 2)
-    .map(([, value]) => value.replace(/, crown to chin$/, ""))
+    .map(([term, value]) =>
+      term === "Head" ? `head ${value.replace(/, crown to chin$/, "")}` : value,
+    )
     .join(" · ");
   const H = `h${headingLevel}` as "h2" | "h3";
   const notes = [doc?.diyNote, ...(doc ? [] : (preset.notes ?? []))].filter(
@@ -83,14 +87,17 @@ export function DocumentCard({
       <div className="label">Document</div>
       <H className="doc-name">{doc?.name ?? preset.name}</H>
       <p className="doc-brief">{brief}</p>
-      <button
-        className="text-button doc-more-toggle"
-        aria-expanded={more}
-        onClick={() => setMore((v) => !v)}
-      >
-        {more ? "Hide the numbers" : "Show the numbers and rules link"}
-      </button>
-      <div className={`doc-body${more ? " show" : ""}`}>
+      {!pinned && (
+        <button
+          className="text-button doc-more-toggle"
+          aria-expanded={more}
+          onClick={() => setMore((v) => !v)}
+        >
+          {more ? "Hide rules and sources" : "Rules and sources"}
+          <ChevronDown size={14} aria-hidden="true" />
+        </button>
+      )}
+      <div className={`doc-body${more || pinned ? " show" : ""}`}>
       <dl className="doc-specs">
         {rows.map(([term, value]) => (
           <div key={term}>

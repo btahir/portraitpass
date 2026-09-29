@@ -75,8 +75,11 @@ const GENERIC_RULES: [RegExp, string][] = [
 ];
 
 /** What only a person can judge: the document's own rules, plus expression, glasses and recency when they are missing. */
-export function youCheck(doc: DocumentSpec | undefined): string[] {
-  const rules = [...(doc?.rules ?? [])];
+export function youCheck(doc: DocumentSpec | undefined, original = false): string[] {
+  // An original-only document already shows its accepted files and size limits in the file checks.
+  const rules = (doc?.rules ?? []).filter(
+    (r) => !original || !/^(accepted files?|accepted formats?|file size|file type)\b/i.test(r),
+  );
   for (const [pattern, text] of GENERIC_RULES)
     if (!rules.some((r) => pattern.test(r))) rules.push(text);
   return rules;
@@ -250,19 +253,27 @@ export function CheckDetails({
 }
 
 /** What only a person can judge: the document's own rules. */
-export function YouCheck({ doc, hasPhoto }: { doc?: DocumentSpec; hasPhoto: boolean }) {
+export function YouCheck({
+  doc,
+  preset,
+  hasPhoto,
+}: {
+  doc?: DocumentSpec;
+  preset: Preset;
+  hasPhoto: boolean;
+}) {
   return (
     <section className="check-group you-check" aria-label={hasPhoto ? "You check" : "Before you take the photo"}>
       <h3>{hasPhoto ? "You check" : "Before you take the photo"}</h3>
       <ul>
-        {youCheck(doc).map((rule) => (
+        {youCheck(doc, preset.mode === "original").map((rule) => (
           <li key={rule}>{rule}</li>
         ))}
       </ul>
       <p className="fine-print">
         {hasPhoto
-          ? "A tool cannot judge these. Check them against the rules link above."
-          : "These come from the rules linked on the left."}
+          ? "A tool cannot judge these. Check them against the rules and sources."
+          : "These come from the rules and sources for this document."}
       </p>
     </section>
   );

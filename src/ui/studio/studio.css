@@ -1,4 +1,5 @@
-/* The studio. Tokens come from src/ui/styles.css. */
+/* The studio. Tokens come from src/ui/styles.css. Colours are tokens only, so system dark and the header toggle look the same.
+   Physical left/right are avoided in favour of logical properties; only the photo ruler and the photo's own coordinates stay physical. */
 .visually-hidden {
   position: absolute;
   width: 1px;
@@ -53,7 +54,7 @@
    The DOM is already in phone order (document, photo, verdict and download, checks, tools), so nothing below reorders it. */
 .studio-grid {
   display: grid;
-  grid-template-columns: 264px minmax(0, 1fr) 372px;
+  grid-template-columns: 300px minmax(0, 1fr) 360px;
   grid-template-rows: auto 1fr;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -139,6 +140,12 @@
 .step.now i {
   border-color: var(--ink);
 }
+.step-of {
+  display: none;
+  font-weight: 400;
+  font-size: 12.5px;
+  color: var(--muted);
+}
 
 /* Document card */
 .doc-card {
@@ -154,16 +161,17 @@
 .doc-specs {
   margin: 0;
   display: grid;
-  gap: 7px;
+  gap: 9px;
 }
+/* Label over value: the rail is narrow, and a value like "28.6-34.9 mm from the bottom edge" wraps badly beside a label. */
 .doc-specs > div {
   display: grid;
-  grid-template-columns: 76px 1fr;
-  gap: 8px;
+  gap: 1px;
   font-size: 13.5px;
 }
 .doc-specs dt {
   color: var(--muted);
+  font-size: 12px;
 }
 .doc-specs dd {
   margin: 0;
@@ -171,7 +179,7 @@
 }
 .doc-notes {
   margin: 12px 0 0;
-  padding-left: 16px;
+  padding-inline-start: 16px;
   font-size: 13px;
   color: var(--muted);
   line-height: 1.5;
@@ -253,9 +261,16 @@
   margin: 0 0 10px;
 }
 .tool-buttons {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+.tool-buttons .small-button {
+  justify-content: flex-start;
+  min-width: 0;
+  gap: 6px;
+  padding-inline: 8px;
+  white-space: nowrap;
 }
 .adjust summary {
   cursor: pointer;
@@ -280,32 +295,62 @@
 }
 .slider-bare {
   margin: 0;
-  flex: 0 1 220px;
-  min-width: 90px;
+  flex: 1 1 120px;
+  max-width: 260px;
+  min-width: 0;
 }
 .fit-button {
   width: 100%;
   margin-top: 6px;
 }
-.color-options {
-  display: flex;
-  gap: 12px;
+
+/* Background colour: three named swatches. The ring is an outline on padded buttons, so nothing clips it. */
+.swatches {
   margin: 12px 0 8px;
 }
-.color-option {
-  width: 32px;
-  height: 32px;
+.swatch-legend {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.color-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.swatch {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-width: 64px;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 12px;
+}
+.swatch:hover:not(:disabled) {
+  background: var(--soft);
+}
+.swatch-dot {
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  border: 2px solid var(--line);
+  border: 1px solid var(--muted);
 }
-.color-option.active {
-  border-color: var(--accent);
-  box-shadow:
-    0 0 0 2px var(--surface),
-    0 0 0 4px var(--accent);
+.swatch.active .swatch-dot {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
-.background-note,
-.export-warning {
+.swatch.active .swatch-name {
+  font-weight: 600;
+}
+.background-note {
   display: flex;
   gap: 8px;
   align-items: flex-start;
@@ -314,43 +359,31 @@
   margin: 10px 0 0;
   color: var(--muted);
 }
-.background-note svg,
-.export-warning svg {
+.background-note svg {
   margin-top: 2px;
 }
-.background-note.warn,
-.export-warning {
+.background-note.warn {
   color: var(--ink);
   background: var(--warn-soft);
   border-radius: 6px;
   padding: 9px 10px;
 }
-.background-note.warn svg,
-.export-warning svg {
+.background-note.warn svg {
   color: var(--warn);
-}
-.export-warning.quiet {
-  background: var(--soft);
-}
-.digital-note {
-  font-size: 13px;
-  color: var(--muted);
-}
-.digital-note p {
-  color: var(--ink);
-  font-weight: 600;
-  margin: 8px 0 4px;
 }
 
 /* Intake */
 .intake {
-  margin: 32px;
-  padding: 32px 30px 26px;
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 40px;
+  align-content: start;
+  margin: 28px;
+  padding: 36px 36px 32px;
   border: 1.5px dashed var(--line);
   border-radius: 8px;
   background: var(--surface);
-  max-width: 560px;
-  align-self: center;
 }
 .intake.dragging {
   border-color: var(--accent);
@@ -367,14 +400,14 @@
   margin-bottom: 20px;
 }
 .intake-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
 .intake-actions .primary,
 .intake-actions .secondary {
-  min-height: 46px;
-  padding: 10px 20px;
+  min-height: 48px;
+  padding: 10px 16px;
   font-size: 15px;
 }
 .intake-extra {
@@ -393,12 +426,12 @@
   color: var(--muted);
   margin: 20px 0 0;
 }
-.intake-tip {
-  border-top: 1px solid var(--line);
-  margin: 18px 0 0;
-  padding-top: 14px;
-  font-size: 13.5px;
-  color: var(--muted);
+.intake-rules {
+  border-inline-start: 1px solid var(--line);
+  padding-inline-start: 40px;
+}
+.intake-rules .you-check li {
+  font-size: 14px;
 }
 
 /* Stage */
@@ -415,12 +448,12 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 12px;
+  gap: 8px 10px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--line);
 }
 .stage-actions {
-  margin-left: auto;
+  margin-inline-start: auto;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -433,9 +466,12 @@
   padding: 3px;
 }
 .segmented button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 0;
   background: transparent;
-  padding: 6px 12px;
+  padding: 6px 11px;
   border-radius: 6px;
   font-size: 13px;
   color: var(--muted);
@@ -443,6 +479,13 @@
 .segmented button.active {
   background: var(--ink);
   color: var(--paper);
+}
+.tool-toggle[aria-pressed="true"] {
+  background: var(--soft);
+  border-color: var(--ink);
+}
+.stage-actions .small-button {
+  gap: 6px;
 }
 .frame-note {
   display: flex;
@@ -507,6 +550,7 @@
   width: calc(var(--maxh) * var(--ratio, 1));
   max-width: 100%;
   aspect-ratio: var(--ratio, 1);
+  /* Photo paper is white in both themes. */
   background: #fff;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.16);
 }
@@ -523,6 +567,22 @@
 .canvas-frame canvas.interactive:active {
   cursor: grabbing;
 }
+/* The sheet's cut guides over the preview, drawn from the same layout the export uses. Paper is white, so the ink is fixed. */
+.sheet-guides {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.sheet-guides line {
+  stroke: #6f7773;
+  stroke-width: 1.2px;
+  vector-effect: non-scaling-stroke;
+}
+.sheet-guides[data-style="edge-to-edge"] line {
+  stroke-dasharray: 6 4;
+}
 .ruler {
   flex: none;
   margin-top: -1px;
@@ -537,22 +597,37 @@
   fill: var(--ok);
   opacity: 0.6;
 }
+/* Before / after: the original with the crop outlined, and the framed photo, both at the same height. */
 .compare-source {
-  margin: 0 12px 0 0;
-  flex: 1 1 0;
+  margin: 0;
+  margin-inline-end: 12px;
+  width: calc(var(--maxh) * var(--ratio, 1));
+  flex: 0 1 auto;
   min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 8px;
 }
-.compare-source img {
+.compare-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: var(--ratio, 1);
+  overflow: hidden;
+  background: #fff;
+}
+.compare-frame img {
   display: block;
   width: 100%;
-  height: auto;
-  max-height: var(--maxh);
-  object-fit: contain;
-  background: #fff;
+  height: 100%;
+  object-fit: fill;
+}
+.compare-crop {
+  position: absolute;
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+  /* The rest of the original is dimmed so the crop reads as the part that is kept. */
+  box-shadow: 0 0 0 999px rgba(15, 33, 39, 0.5);
 }
 .compare-source figcaption,
 .canvas-caption {
@@ -563,7 +638,6 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-wrap: wrap;
   gap: 8px 10px;
   padding: 4px 16px 12px;
   font-size: 13px;
@@ -572,29 +646,38 @@
 .zoom-bar .icon-button.small {
   width: 30px;
   height: 30px;
+  flex: none;
+}
+.zoom-bar .small-button {
+  flex: none;
+  gap: 6px;
 }
 .zoom-value {
+  flex: none;
   min-width: 3.4ch;
-  text-align: right;
+  text-align: end;
   font-variant-numeric: tabular-nums;
 }
 .stage-foot {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   padding: 0 16px 14px;
   font-size: 12.5px;
   color: var(--muted);
 }
+.stage-hint:empty {
+  display: none;
+}
 .file-name {
   overflow-wrap: anywhere;
-  text-align: right;
 }
+/* accent-hover is the darker persimmon in light and the lighter peach in dark, so it clears 4.5:1 on the stage in both. */
 .demo-badge {
-  color: var(--accent);
+  color: var(--accent-hover);
   font-weight: 600;
-  text-align: right;
+  white-space: nowrap;
 }
 
 /* Checks */
@@ -687,7 +770,7 @@
 }
 .you-check ul {
   margin: 0;
-  padding-left: 18px;
+  padding-inline-start: 18px;
 }
 .you-check li {
   font-size: 13.5px;
@@ -695,7 +778,7 @@
   margin: 7px 0;
 }
 
-/* On a phone the measurements fold behind one line; the verdict and the download stay in view. */
+/* Below the desktop layout the measurements fold behind one line; the verdict and the download stay in view. */
 .check-fold {
   border-block: 1px solid var(--line);
 }
@@ -719,7 +802,7 @@
   color: var(--warn);
 }
 .check-fold > summary svg {
-  margin-left: auto;
+  margin-inline-start: auto;
   color: var(--muted);
   transition: transform 0.15s;
 }
@@ -771,87 +854,248 @@
 
 /* Documents that cannot be made at home */
 .studio-simple {
-  max-width: 820px;
+  max-width: 760px;
   padding: 28px 0 24px;
 }
 .studio-pick {
-  margin-top: 28px;
+  margin-bottom: 28px;
   max-width: 460px;
 }
-.studio-pick h2 {
-  font-size: 16px;
-  margin-bottom: 10px;
+.studio-pick-label {
+  margin: 0 0 6px;
 }
 
-/* One flow under 1180px: document, photo, verdict and download, checks, then tools. */
+/* Two columns from 961px: steps and the one-line document over the photo and tools on the left, verdict and download on the right. */
 @media (max-width: 1180px) {
   .studio-grid {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: none;
-    gap: 20px;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    grid-template-rows: auto auto 1fr;
+    column-gap: 20px;
+    row-gap: 14px;
+    align-items: start;
     border: 0;
     border-radius: 0;
     background: transparent;
     overflow: visible;
   }
-  .studio-top,
-  .studio-tools,
-  .studio-stage,
-  .studio-side {
-    grid-column: 1;
-    grid-row: auto;
+  .studio-top {
+    grid-column: 1 / -1;
+    grid-row: 1;
     padding: 0;
+    gap: 10px;
+  }
+  .studio-stage {
+    grid-column: 1;
+    grid-row: 2;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+  .studio-tools {
+    grid-column: 1;
+    grid-row: 3;
+    padding: 0;
+  }
+  .studio-side {
+    grid-column: 2;
+    grid-row: 2 / span 2;
+    padding: 0;
+  }
+  .studio-grid.is-empty {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+  }
+  .studio-grid.is-empty .studio-stage {
+    grid-column: 1;
   }
   .studio-top .steps {
     flex-direction: row;
     flex-wrap: wrap;
     gap: 4px 8px;
   }
-  .studio-stage {
-    border: 1px solid var(--line);
-    border-radius: 8px;
-  }
   .stage {
     position: static;
   }
   .stage-canvas {
-    --maxh: min(66vh, 640px);
+    --maxh: clamp(300px, calc(100vh - 300px), 620px);
   }
-  .intake {
-    margin: 0;
-    max-width: none;
-    background: var(--surface);
+
+  /* The document folds into one line: key numbers, then two disclosures. The heading above already names the document. */
+  .doc-card {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 18px;
+    padding: 6px 14px;
   }
-  .studio-side {
-    max-width: 760px;
+  .doc-card > .label,
+  .doc-card > .doc-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
   }
-}
-@media (min-width: 761px) and (max-width: 1180px) {
-  .studio-tools {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px 28px;
-    align-items: start;
-  }
-  .studio-tools > * + * {
-    border-top: 0;
-    padding-top: 0;
-  }
-}
-@media (max-width: 760px) {
   .doc-brief {
     display: block;
-    margin: 0 0 6px;
+    flex: 1 1 260px;
+    margin: 0;
+    padding-block: 8px;
     font-size: 14px;
-    color: var(--muted);
+    color: var(--ink);
   }
   .doc-more-toggle {
     display: inline-flex;
-    margin-bottom: 4px;
+    min-height: 40px;
   }
   .doc-body:not(.show) {
     display: none;
   }
+  .doc-body {
+    order: 5;
+    flex: 1 0 100%;
+    margin-top: 2px;
+    padding: 12px 0;
+    border-top: 1px solid var(--line);
+  }
+  .doc-specs {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px 18px;
+  }
+  .doc-switch {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .doc-switch summary {
+    display: flex;
+    align-items: center;
+    min-height: 40px;
+  }
+  .doc-switch[open] {
+    order: 6;
+    flex: 1 0 100%;
+    padding-block: 4px 12px;
+    border-top: 1px solid var(--line);
+  }
+}
+
+/* Before a photo on a wide screen there is nothing to build a rail for: the steps and the one-line document sit over one big "Add your photo". */
+@media (min-width: 1181px) {
+  .studio-grid.is-empty {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    row-gap: 14px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
+  }
+  .studio-grid.is-empty .studio-top {
+    grid-column: 1;
+    grid-row: 1;
+    padding: 0;
+    gap: 10px;
+  }
+  .studio-grid.is-empty .studio-top .steps {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+  }
+  .studio-grid.is-empty .studio-stage {
+    grid-column: 1;
+    grid-row: 2;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+  /* The document folds into one line: key numbers, then two disclosures. The heading above already names the document. */
+  .studio-grid.is-empty .doc-card {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 18px;
+    padding: 6px 14px;
+  }
+  .studio-grid.is-empty .doc-card > .label,
+  .studio-grid.is-empty .doc-card > .doc-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+  .studio-grid.is-empty .doc-brief {
+    display: block;
+    flex: 1 1 260px;
+    margin: 0;
+    padding-block: 8px;
+    font-size: 14px;
+    color: var(--ink);
+  }
+  .studio-grid.is-empty .doc-more-toggle {
+    display: inline-flex;
+    min-height: 40px;
+  }
+  .studio-grid.is-empty .doc-body:not(.show) {
+    display: none;
+  }
+  .studio-grid.is-empty .doc-body {
+    order: 5;
+    flex: 1 0 100%;
+    margin-top: 2px;
+    padding: 12px 0;
+    border-top: 1px solid var(--line);
+  }
+  .studio-grid.is-empty .doc-specs {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px 18px;
+  }
+  .studio-grid.is-empty .doc-switch {
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .studio-grid.is-empty .doc-switch summary {
+    display: flex;
+    align-items: center;
+    min-height: 40px;
+  }
+  .studio-grid.is-empty .doc-switch[open] {
+    order: 6;
+    flex: 1 0 100%;
+    padding-block: 4px 12px;
+    border-top: 1px solid var(--line);
+  }
+}
+
+/* One column: document, photo, verdict and download, checks, then tools. */
+@media (max-width: 960px) {
+  .studio-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    row-gap: 18px;
+  }
+  .studio-top,
+  .studio-stage,
+  .studio-tools,
+  .studio-side {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .studio-side {
+    gap: 18px;
+  }
+  .stage-canvas {
+    --maxh: min(66vh, 640px);
+  }
+  .tool-buttons {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+}
+@media (max-width: 760px) {
   .studio-title {
     font-size: 32px;
   }
@@ -859,10 +1103,17 @@
     display: none;
   }
   .studio-head {
-    padding: 16px 0 12px;
+    padding: 14px 0 10px;
   }
   .studio-side {
     gap: 16px;
+  }
+  /* The status line under the photo, not above it, so the photo starts high on a phone. */
+  .frame-note--after {
+    order: 1;
+  }
+  .stage-foot {
+    order: 2;
   }
 }
 @media (max-width: 820px) {
@@ -870,39 +1121,49 @@
     padding: 0 16px;
   }
   .stage-canvas {
-    padding: 16px 10px 8px;
+    padding: 14px 10px 8px;
     --maxh: min(62vh, 520px);
   }
   .stage-toolbar {
-    padding: 10px;
-  }
-  .stage-actions {
-    margin-left: 0;
+    padding: 8px 10px;
   }
   .frame-note {
     margin: 10px 10px 0;
   }
   .intake {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 24px;
+    margin: 0;
     padding: 22px 18px;
+    border: 0;
   }
   .intake h2 {
     font-size: 36px;
   }
-  .zoom-bar .icon-button.small {
-    width: 36px;
-    height: 36px;
-  }
-  .stage-foot {
-    flex-direction: column;
-    gap: 2px;
-  }
-  .file-name,
-  .demo-badge {
-    text-align: left;
+  .intake-rules {
+    border-inline-start: 0;
+    border-top: 1px solid var(--line);
+    padding-inline-start: 0;
+    padding-top: 18px;
   }
 }
+@media (min-width: 821px) and (max-width: 960px) {
+  .intake {
+    margin: 20px;
+  }
+}
+@media (min-width: 961px) and (max-width: 1180px) {
+  .intake {
+    margin: 20px;
+    padding: 28px;
+    gap: 28px;
+  }
+  .intake-rules {
+    padding-inline-start: 28px;
+  }
+}
+/* Phones: steps as dots with the current label and "3 of 4", the toolbar on one row of icon buttons, the zoom on one row. */
 @media (max-width: 560px) {
-  /* Only the current step keeps its words on a phone; the others stay readable to a screen reader. */
   .step:not(.now) > span:not(.visually-hidden) {
     position: absolute;
     width: 1px;
@@ -912,6 +1173,186 @@
     white-space: nowrap;
   }
   .step {
-    padding: 4px 6px;
+    padding: 3px 6px;
+  }
+  .step-of {
+    display: inline;
+  }
+  .studio-top {
+    gap: 6px;
+  }
+  .studio-top .steps {
+    flex-wrap: nowrap;
+    gap: 2px;
+  }
+  .stage-toolbar {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+  .btn-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+  .segmented button {
+    justify-content: center;
+    min-width: 44px;
+    min-height: 40px;
+    padding: 0 8px;
+  }
+  .stage-actions {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+  .stage-actions .small-button,
+  .zoom-bar .small-button {
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+  .zoom-bar {
+    gap: 4px;
+    padding-inline: 10px;
+  }
+  .zoom-label {
+    display: none;
+  }
+  .zoom-bar .icon-button.small {
+    width: 44px;
+    height: 44px;
+  }
+  .slider-bare {
+    max-width: none;
+  }
+  .zoom-value {
+    min-width: 3.6ch;
+  }
+  .intake-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .frame-note-actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+  }
+  .frame-note-actions .text-button {
+    justify-content: center;
+  }
+  .doc-card {
+    gap: 0 12px;
+  }
+  .doc-brief {
+    flex-basis: 100%;
+    padding-block: 8px 0;
+  }
+}
+/* Touch targets of at least 44px wherever a finger is the pointer. */
+@media (max-width: 760px), (pointer: coarse) {
+  .primary,
+  .secondary,
+  .small-button {
+    min-height: 44px;
+  }
+  .icon-button {
+    width: 44px;
+    height: 44px;
+  }
+  .text-button,
+  .doc-more-toggle {
+    min-height: 44px;
+  }
+  .check-control {
+    min-height: 44px;
+  }
+  .adjust summary,
+  .doc-switch summary {
+    display: flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .segmented button {
+    min-height: 40px;
+  }
+  .range {
+    min-height: 44px;
+  }
+  .op-tab {
+    min-height: 44px;
+  }
+}
+
+@media (min-width: 961px) and (max-width: 1180px) {
+  /* The toolbar has to fit in a 600px stage on one row. */
+  .segmented button svg {
+    display: none;
+  }
+}
+/* Both card disclosures read alike: bold label, chevron that turns when open. */
+.doc-more-toggle {
+  gap: 6px;
+  font-weight: 600;
+  font-size: 13.5px;
+  text-decoration: none;
+  color: var(--ink);
+}
+.doc-more-toggle svg {
+  transition: transform 0.15s;
+}
+.doc-more-toggle[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+.doc-switch summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
+}
+.doc-switch summary::-webkit-details-marker {
+  display: none;
+}
+.doc-switch summary::after {
+  content: "";
+  width: 14px;
+  height: 14px;
+  background: currentColor;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat;
+  transition: transform 0.15s;
+}
+.doc-switch[open] summary::after {
+  transform: rotate(180deg);
+}
+@media (max-width: 560px) {
+  /* Photo near the top of the first screen: a slim head, a one-line step, a compact card and toolbar. */
+  .studio-head {
+    padding: 8px 0 4px;
+  }
+  .studio-grid {
+    row-gap: 10px;
+  }
+  .step {
+    padding: 1px 6px;
+    font-size: 13px;
+  }
+  .step i {
+    width: 20px;
+    height: 20px;
+  }
+  .doc-card {
+    padding-block: 0;
+  }
+  .doc-brief {
+    padding-block: 6px 0;
+  }
+  .stage-canvas {
+    padding-top: 6px;
+  }
+  .zoom-bar .small-button,
+  .zoom-bar .icon-button.small {
+    border-radius: 50%;
   }
 }

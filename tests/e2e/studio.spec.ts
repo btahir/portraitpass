@@ -29,10 +29,12 @@ test('a ?doc= deep link opens the studio for that document with its numbers, sou
   await expect(card).toContainText('35 × 45 mm');
   await expect(card).toContainText('29–34 mm, crown to chin');
   await expect(card).toContainText('Requirements checked 28 Sep 2026');
+  // Before a photo the card is one line with a "Rules and sources" disclosure.
+  await card.getByRole('button', { name: 'Rules and sources', exact: true }).click();
   await expect(card.getByRole('link').first()).toHaveAttribute('href', /gov\.uk/);
   await expect(page.getByRole('list', { name: 'Steps' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Add your photo' })).toBeVisible();
-  // Before a photo exists, the right column lists the rules to follow.
+  // Before a photo exists, the rules to follow sit beside the actions.
   await expect(page.getByText('Before you take the photo')).toBeVisible();
   // Legacy preset ids still open.
   await page.goto('/studio/?doc=us-online');
@@ -166,7 +168,7 @@ test('drag, wheel, keyboard, zoom, undo and Adjust precisely keep usable geometr
   await expect(page.getByAltText('Original source photograph', { exact: true })).toBeVisible();
   expect((await saveProject(page)).crop).toEqual(measured.crop);
   await page.getByRole('button', { name: 'Sheet', exact: true }).click();
-  await expect(page.getByText(/sheet · \d+ photos/)).toBeVisible();
+  await expect(page.getByText(/sheet, \d+ photos/)).toBeVisible();
 });
 
 test('a second finger zooms without moving the crop, as one undo step', async ({ page }) => {
@@ -292,7 +294,7 @@ test('a HEIC on a print document switches to the US renewal original and downloa
   await expect(page).toHaveURL(/doc=us-passport-online$/);
 });
 
-test('background replacement keeps its policy: off by default, a warning at the toggle, another at export', async ({ page }) => {
+test('background replacement keeps its policy: off by default, one warning at the toggle, then one at export', async ({ page }) => {
   test.setTimeout(90_000);
   await openStudio(page, 'general-id');
   await page.getByRole('button', { name: 'Try a sample', exact: true }).click();
@@ -310,7 +312,7 @@ test('background replacement keeps its policy: off by default, a warning at the 
   await expect(page.getByLabel('Replace background locally', { exact: true })).not.toBeChecked();
   await page.getByLabel('Replace background locally', { exact: true }).click();
   await expect(page.getByLabel('Replace background locally', { exact: true })).toBeChecked();
-  await expect(page.getByText(/Background edited — not accepted/)).toHaveCount(0);
+  await expect(page.getByText(/Not accepted for/)).toHaveCount(0);
   await page.getByRole('button', { name: 'Use light blue background', exact: true }).click();
   await expect.poll(async () => page.locator('canvas').first().evaluate((canvas: HTMLCanvasElement) => [...canvas.getContext('2d')!.getImageData(2, 2, 1, 1).data].slice(0, 3))).toEqual([220, 233, 245]);
   const masked = await saveProject(page);
@@ -323,7 +325,10 @@ test('background replacement keeps its policy: off by default, a warning at the 
   await expect(page.getByLabel('Replace background locally', { exact: true })).not.toBeChecked();
   await expect(page.locator('#background-note')).toContainText(/does not accept digitally altered photos/);
   await page.getByLabel('Replace background locally', { exact: true }).click();
-  await expect(page.getByText('Background edited — not accepted for US passport', { exact: false })).toBeVisible();
+  // One warning at a time: the note at the toggle gives way to the alert above the download button.
+  await expect(page.locator('#background-note')).toHaveCount(0);
+  await expect(page.getByText('Background edited. Not accepted for US passport.', { exact: true })).toHaveCount(1);
+  await expect(page.getByRole('group', { name: 'Colour' }).getByText('Light grey')).toBeVisible();
 });
 
 test('a download shows the tips ask, and Tips never unlock anything', async ({ page }) => {
@@ -442,4 +447,63 @@ test('Save project works for every DIY document, not only the classic presets', 
     await expect(page.getByRole('button', { name: 'Save project', exact: true })).toBeEnabled();
     await expect(page).toHaveURL(new RegExp(`doc=${id}`));
   }
+});
+
+test('system dark mode (no toggle click) keeps the loaded studio and the download panel free of serious contrast failures', async ({ browser }) => {
+  for (const size of [{ width: 1440, height: 900 }, { width: 390, height: 844 }]) {
+    for (const colorScheme of ['dark', 'light'] as const) {
+      const context = await browser.newContext({ colorScheme, viewport: size });
+      const page = await context.newPage();
+      await openStudio(page);
+      // The sample carries the "Demo photo" badge, which is part of what axe checks here.
+      await page.getByRole('button', { name: 'Try a sample', exact: true }).click();
+      await expect(page.getByText('Demo photo, not for applications')).toBeVisible();
+      // The theme comes from the system setting alone: data-theme is never set.
+      expect(await page.evaluate(() => document.documentElement.dataset.theme ?? '')).toBe('');
+      expect(serious(await new AxeBuilder({ page }).analyze())).toEqual([]);
+      const download = page.getByRole('button', { name: 'Download print sheet', exact: true });
+      await download.scrollIntoViewIfNeeded();
+      const [fg, bg] = await download.evaluate(el => { const c = getComputedStyle(el); return [c.color, c.backgroundColor]; });
+      const lum = (rgb: string) => { const [r, g, b] = rgb.match(/\d+/g)!.slice(0, 3).map(v => { const x = Number(v) / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!; };
+      const [hi, lo] = [lum(fg), lum(bg)].sort((a, b) => b - a);
+      expect((hi! + 0.05) / (lo! + 0.05)).toBeGreaterThanOrEqual(4.5);
+      await context.close();
+    }
+  }
+});
+
+test('at 1024px the verdict and the download sit beside the photo, reachable without scrolling', async ({ page }) => {
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await openStudio(page);
+  await upload(page, await geometryImage());
+  const canvas = (await page.getByRole('img', { name: /^Framed photo/ }).boundingBox())!;
+  const button = (await page.getByRole('button', { name: 'Download print sheet', exact: true }).boundingBox())!;
+  expect(button.x).toBeGreaterThan(canvas.x + canvas.width);
+  expect(button.y + button.height).toBeLessThan(1100);
+  // Tools stay in one column: "Adjust precisely" is never alone in a second column.
+  const adjust = (await page.getByText('Adjust precisely', { exact: true }).boundingBox())!;
+  const save = (await page.getByRole('button', { name: 'Save project', exact: true }).boundingBox())!;
+  expect(Math.abs(adjust.x - save.x)).toBeLessThan(40);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test('on a phone the photo starts near the top, the toolbar is one row and the zoom does not wrap', async ({ browser }) => {
+  test.setTimeout(90_000);
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const page = await context.newPage();
+  // A returning visitor: the one-time face notice has been acknowledged, so the sample is framed automatically.
+  await page.addInitScript(key => localStorage.setItem(key, '1'), NOTICE_KEY);
+  await openStudio(page);
+  await page.getByRole('button', { name: 'Try a sample', exact: true }).click();
+  await expect(page.getByText('Auto-framed. Check the lines.')).toBeVisible({ timeout: 60_000 });
+  const box = async (locator: ReturnType<Page['locator']>) => (await locator.boundingBox())!;
+  const canvas = await box(page.getByRole('img', { name: /^Framed photo/ }));
+  expect(canvas.y).toBeLessThan(310);
+  const [view, undo] = [await box(page.getByRole('button', { name: 'Frame', exact: true })), await box(page.getByRole('button', { name: 'Undo position', exact: true }))];
+  expect(Math.abs(view.y - undo.y)).toBeLessThan(8);
+  const [minus, plus, reset] = [await box(page.getByRole('button', { name: 'Zoom out', exact: true })), await box(page.getByRole('button', { name: 'Zoom in', exact: true })), await box(page.getByRole('button', { name: 'Reset', exact: true }))];
+  expect(Math.abs(minus.y - plus.y)).toBeLessThan(4);
+  expect(Math.abs(minus.y - reset.y)).toBeLessThan(4);
+  for (const b of [view, undo, minus, plus, reset]) expect(Math.min(b.width, b.height)).toBeGreaterThanOrEqual(40);
+  await context.close();
 });

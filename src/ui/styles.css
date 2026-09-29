@@ -178,7 +178,7 @@ p {
 .skip-link {
   position: absolute;
   top: -60px;
-  left: 16px;
+  inset-inline-start: 16px;
   background: var(--ink);
   color: var(--paper);
   z-index: 50;
@@ -230,7 +230,7 @@ p {
   display: flex;
   align-items: center;
   gap: 22px;
-  margin-left: auto;
+  margin-inline-start: auto;
   font-size: 14px;
   color: var(--muted);
 }
@@ -408,7 +408,7 @@ p {
   color: var(--accent);
 }
 .notice button {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 .busy-indicator {
   position: fixed;
@@ -467,7 +467,7 @@ p {
   color: var(--muted);
 }
 .content-page ul {
-  padding-left: 20px;
+  padding-inline-start: 20px;
 }
 .support-tiers {
   display: grid;
@@ -481,10 +481,10 @@ p {
   flex-direction: column;
   gap: 10px;
   text-decoration: none;
-  border-right: 1px solid var(--line);
+  border-inline-end: 1px solid var(--line);
 }
 .support-tier:last-child {
-  border-right: 0;
+  border-inline-end: 0;
 }
 .support-tier:hover {
   background: var(--soft);
@@ -544,7 +544,7 @@ p {
     grid-template-columns: 1fr 1fr;
   }
   .support-tier:nth-child(2) {
-    border-right: 0;
+    border-inline-end: 0;
   }
   .support-tier:nth-child(-n + 2) {
     border-bottom: 1px solid var(--line);
@@ -556,5 +556,42 @@ p {
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
     transition: none !important;
+  }
+}
+
+/* Header and footer links get a 44px target where a finger is the pointer. */
+@media (max-width: 820px), (pointer: coarse) {
+  .site-nav a,
+  .footer-links a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .footer-links {
+    gap: 0 22px;
+  }
+  .site-footer .footer-lang > span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .brand {
+    min-height: 44px;
+  }
+  .icon-button {
+    width: 44px;
+    height: 44px;
+  }
+}
+@media (max-width: 420px) {
+  .site-header .wrap {
+    gap: 8px;
+  }
+  .site-nav {
+    gap: 10px;
+  }
+  .brand {
+    font-size: 19px;
+    gap: 8px;
   }
 }

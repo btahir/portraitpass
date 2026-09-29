@@ -16,7 +16,6 @@ import {
   Heart,
   ImagePlus,
   LoaderCircle,
-  LockKeyhole,
   X,
 } from "lucide-react";
 import {
@@ -810,13 +809,14 @@ export default function Studio({ docId, intake, onIntakeDone, onDocChange }: Stu
         {notices}
         <div className="studio-simple">
           <h1 className="visually-hidden">{doc.name} photo</h1>
+          <div className="studio-pick" id="studio-pick" role="group" aria-label="Choose another document">
+            <p className="label studio-pick-label">Looking for another document?</p>
+            <DocumentPicker compact onChange={selectDoc} />
+          </div>
           <NotDiyExplainer
             doc={doc}
             onPickAnother={() => document.getElementById("studio-pick")?.querySelector("input")?.focus()}
           />
-          <div className="studio-pick" id="studio-pick" role="group" aria-label="Choose another document">
-            <DocumentPicker compact value={doc.id} onChange={selectDoc} />
-          </div>
         </div>
       </main>
     );
@@ -847,7 +847,11 @@ export default function Studio({ docId, intake, onIntakeDone, onDocChange }: Stu
         <h1 className="studio-title serif">{name} photo</h1>
         <p className="studio-sub">Frame it against the size guides. Everything runs on this device.</p>
       </div>
-      <div className="studio-grid" aria-label="Photo preparation studio" role="region">
+      <div
+        className={`studio-grid${photo ? "" : " is-empty"}`}
+        aria-label="Photo preparation studio"
+        role="region"
+      >
         <div className="studio-top">
           <StepsRail current={step} />
           <DocumentCard
@@ -908,12 +912,15 @@ export default function Studio({ docId, intake, onIntakeDone, onDocChange }: Stu
               onCamera={() => setCameraOpen(true)}
               onSample={() => void loadSample()}
               onOpenProject={() => projectRef.current?.click()}
-            />
+            >
+              <YouCheck doc={doc} preset={preset} hasPhoto={false} />
+            </IntakePanel>
           )}
         </div>
+        {photo && (
         <div className="studio-side">
-          {photo && <Verdict summary={summary} />}
-          {photo && crop && (
+          <Verdict summary={summary} />
+          {crop && (
             <div className="output-slot">
               <OutputPanel
                 doc={doc}
@@ -942,17 +949,16 @@ export default function Studio({ docId, intake, onIntakeDone, onDocChange }: Stu
               )}
             </div>
           )}
-          {photo && (
-            <CheckDetails
-              preset={preset}
-              measure={measure}
-              photoChecks={photoChecks}
-              file={file}
-              summary={summary}
-            />
-          )}
-          <YouCheck doc={doc} hasPhoto={!!photo} />
+          <CheckDetails
+            preset={preset}
+            measure={measure}
+            photoChecks={photoChecks}
+            file={file}
+            summary={summary}
+          />
+          <YouCheck doc={doc} preset={preset} hasPhoto />
         </div>
+        )}
         {photo && (
           <div className="tools studio-tools">
             {photo && (
@@ -1002,15 +1008,6 @@ export default function Studio({ docId, intake, onIntakeDone, onDocChange }: Stu
                   setExported(false);
                 }}
               />
-            )}
-            {photo && isOriginal && (
-              <div className="digital-note">
-                <LockKeyhole size={16} aria-hidden="true" />
-                <p>Online application? Keep your original.</p>
-                <span>
-                  Cropping, print sheets and editing are off. The downloaded file is identical to the source.
-                </span>
-              </div>
             )}
           </div>
         )}

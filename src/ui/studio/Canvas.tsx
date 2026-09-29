@@ -347,9 +347,26 @@ export function Canvas(props: CanvasProps) {
   return (
     <div className="canvas-row">
       {view === "compare" && !original && (
-        <figure className="compare-source">
-          <img src={photo.url} alt="Original source photograph" />
-          <figcaption>Original</figcaption>
+        <figure
+          className="compare-source"
+          style={{ ["--ratio" as string]: String(photo.width > 0 ? photo.width / photo.height : 1) }}
+        >
+          <div className="compare-frame">
+            <img src={photo.url} alt="Original source photograph" />
+            {photo.width > 0 && (
+              <span
+                className="compare-crop"
+                aria-hidden="true"
+                style={{
+                  left: `${(crop.x / photo.width) * 100}%`,
+                  top: `${(crop.y / photo.height) * 100}%`,
+                  width: `${(crop.width / photo.width) * 100}%`,
+                  height: `${(crop.height / photo.height) * 100}%`,
+                }}
+              />
+            )}
+          </div>
+          <figcaption>Original, crop outlined</figcaption>
         </figure>
       )}
       {view === "frame" && !original && !showSheet && (
@@ -399,6 +416,20 @@ export function Canvas(props: CanvasProps) {
               release(event.pointerId, event.currentTarget)
             }
           />
+          {sheet && (
+            <svg
+              className="sheet-guides"
+              viewBox={`0 0 ${sheet.width} ${sheet.height}`}
+              preserveAspectRatio="none"
+              aria-hidden="true"
+              focusable="false"
+              data-style={sheet.style}
+            >
+              {sheet.cutMarks.map((m, i) => (
+                <line key={i} x1={m.x1} y1={m.y1} x2={m.x2} y2={m.y2} />
+              ))}
+            </svg>
+          )}
         </div>
         {view === "compare" && !original && <div className="canvas-caption">Framed</div>}
       </div>

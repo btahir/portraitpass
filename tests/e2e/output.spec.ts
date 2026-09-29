@@ -9,11 +9,11 @@ const DISCLAIMER = 'We check sizes and positions. The issuing authority decides 
 /** Open the studio for a document through the deep link and the sample photo. */
 async function openWithSample(page: Page, docId: string) {
   await page.goto(`/studio/?doc=${docId}`);
-  const tablist = page.getByRole('tablist', { name: 'Download type' });
+  const panel = page.getByRole('region', { name: 'Download', exact: true });
   const sample = page.getByRole('button', { name: /try a sample/i }).first();
-  await expect(tablist.or(sample)).toBeVisible();
+  await expect(panel.or(sample)).toBeVisible();
   if (await sample.isVisible()) await sample.click();
-  await expect(tablist).toBeVisible({ timeout: 20_000 });
+  await expect(panel).toBeVisible({ timeout: 20_000 });
 }
 async function download(page: Page, name: string) {
   const pending = page.waitForEvent('download');
@@ -62,7 +62,8 @@ test('paper choice changes the layout style and photo count', async ({ page }) =
 
 test('DV lottery exports a 600 x 600 JPEG under 240 KB and shows the result', async ({ page }) => {
   await openWithSample(page, 'dv-lottery');
-  await expect(page.getByRole('tab', { name: 'Digital upload' })).toHaveAttribute('aria-selected', 'true');
+  // A single output is not a one-tab tablist.
+  await expect(page.getByRole('tab')).toHaveCount(0);
   await expect(page.getByText('600 × 600 px · up to 240 KB')).toBeVisible();
   await expect(page.getByText(DISCLAIMER, { exact: false }).first()).toBeVisible();
   const bytes = await download(page, 'Download digital photo');
@@ -93,8 +94,11 @@ test('single photo tab downloads a PNG at the print size', async ({ page }) => {
 
 test('US online renewal offers only the unchanged original', async ({ page }) => {
   await openWithSample(page, 'us-passport-online');
-  await expect(page.getByRole('tab')).toHaveCount(1);
-  await expect(page.getByRole('tab', { name: 'Original' })).toHaveAttribute('aria-selected', 'true');
+  // One output is a heading and a button, not a tablist with a single tab.
+  await expect(page.getByRole('tab')).toHaveCount(0);
+  await expect(page.getByRole('tablist')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Download', exact: true })).toBeVisible();
+  await expect(page.getByText('Accepted', { exact: true })).toHaveCount(0);
   await expect(page.getByLabel('Paper size')).toHaveCount(0);
   await expect(page.getByText(DISCLAIMER, { exact: false }).first()).toBeVisible();
   const bytes = await download(page, 'Download original');

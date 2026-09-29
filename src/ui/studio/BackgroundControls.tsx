@@ -1,15 +1,17 @@
+import { useId } from "react";
 import { TriangleAlert } from "lucide-react";
-import { backgroundWarning, type Preset } from "../../core/index";
+import type { Preset } from "../../core/index";
 
 const COLOURS: [string, string][] = [
-  ["#ffffff", "white"],
-  ["#eeeeee", "light grey"],
-  ["#dce9f5", "light blue"],
+  ["#ffffff", "White"],
+  ["#eeeeee", "Light grey"],
+  ["#dce9f5", "Light blue"],
 ];
 
 /**
  * Background replacement. Off by default. Where the issuing authority forbids altered photos the
- * warning sits at the toggle and again while the replacement is on. Original-only documents never show this.
+ * warning sits at the toggle until it is switched on; from then on the one warning sits above the
+ * download button (OutputPanel), where the decision is made. Original-only documents never show this.
  */
 export function BackgroundControls({
   preset,
@@ -24,7 +26,8 @@ export function BackgroundControls({
   onToggle(on: boolean): void;
   onColour(colour: string): void;
 }) {
-  const note = backgroundWarning(preset);
+  const legend = useId();
+  const forbidden = preset.backgroundEdit === "forbidden";
   return (
     <section className="tool-section" aria-label="Background">
       <h3>Background</h3>
@@ -33,56 +36,49 @@ export function BackgroundControls({
           type="checkbox"
           checked={!!background}
           disabled={busy}
-          aria-describedby={note ? "background-note" : undefined}
+          aria-describedby={forbidden && !background ? "background-note" : undefined}
           onChange={(event) => onToggle(event.target.checked)}
         />
         Replace background locally
       </label>
-      {note && (
-        <p
-          id="background-note"
-          className={`background-note${preset.backgroundEdit === "forbidden" ? " warn" : ""}`}
-        >
+      {forbidden && !background && (
+        <p id="background-note" className="background-note warn">
           <TriangleAlert size={14} aria-hidden="true" />
-          <span>{note}</span>
+          <span>
+            {preset.name} does not accept digitally altered photos. Retake against a plain light wall
+            if you can.
+          </span>
         </p>
       )}
       {background && (
         <>
-          <div className="color-options" role="group" aria-label="Background colour">
-            {COLOURS.map(([value, name]) => (
-              <button
-                key={value}
-                aria-label={`Use ${name} background`}
-                aria-pressed={background === value}
-                className={`color-option${background === value ? " active" : ""}`}
-                style={{ background: value }}
-                disabled={busy}
-                onClick={() => onColour(value)}
-              />
-            ))}
+          <div className="swatches" role="group" aria-labelledby={legend}>
+            <span className="swatch-legend" id={legend}>
+              Colour
+            </span>
+            <div className="color-options">
+              {COLOURS.map(([value, name]) => (
+                <button
+                  key={value}
+                  type="button"
+                  aria-label={`Use ${name.toLowerCase()} background`}
+                  aria-pressed={background === value}
+                  className={`swatch${background === value ? " active" : ""}`}
+                  disabled={busy}
+                  onClick={() => onColour(value)}
+                >
+                  <span className="swatch-dot" style={{ background: value }} aria-hidden="true" />
+                  <span className="swatch-name" aria-hidden="true">
+                    {name}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
           <p className="fine-print">
-            Uses portrait segmentation on this device (about 12 MB, loaded only when you ask).
-            Check hair and edges. The downloaded file says the background was replaced.
+            Uses portrait segmentation on this device (about 12 MB, loaded only when you ask). Check
+            hair and edges. The downloaded file says the background was replaced.
           </p>
-          {preset.backgroundEdit === "forbidden" ? (
-            <p className="export-warning">
-              <TriangleAlert size={14} aria-hidden="true" />
-              <span>Background edited — not accepted for {preset.name}.</span>
-            </p>
-          ) : preset.backgroundEdit === "unspecified" ? (
-            <p className="export-warning">
-              <TriangleAlert size={14} aria-hidden="true" />
-              <span>
-                Background edited. Check that the receiver accepts this for {preset.name}.
-              </span>
-            </p>
-          ) : (
-            <p className="export-warning quiet">
-              <span>Background replaced by PortraitPass. The file records this.</span>
-            </p>
-          )}
         </>
       )}
     </section>

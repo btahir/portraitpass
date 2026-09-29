@@ -271,6 +271,12 @@
   flex-wrap: wrap;
   gap: 10px;
   justify-content: center;
+  /* A tall portrait stream must never push the shutter out of view: the row sticks to the dialog's bottom edge. */
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding-block: 10px;
+  background: var(--surface, #fffef9);
 }
 .cc-shutter {
   min-width: 160px;
@@ -320,7 +326,7 @@
 }
 .cc-hint strong {
   font-weight: 600;
-  margin-right: 4px;
+  margin-inline-end: 4px;
 }
 .cc-hint.is-ok svg {
   color: var(--ok, #3f6b45);

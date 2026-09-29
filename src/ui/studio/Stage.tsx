@@ -1,4 +1,17 @@
-import { Info, Minus, Plus, RotateCcw, ScanFace, TriangleAlert, Undo2, Check } from "lucide-react";
+import {
+  Check,
+  Columns2,
+  Crop as CropIcon,
+  Grid3x3,
+  Info,
+  LayoutGrid,
+  Minus,
+  Plus,
+  RotateCcw,
+  ScanFace,
+  TriangleAlert,
+  Undo2,
+} from "lucide-react";
 import type { Crop, Landmarks, Preset, SheetOrientation, SheetStyle } from "../../core/index";
 import { PAPERS } from "../../core/index";
 import type { LoadedPhoto } from "../../browser/engine";
@@ -55,6 +68,8 @@ export function Stage(p: StageProps) {
       : undefined;
   const paper = PAPERS.find((x) => x.id === p.paperId);
   const view: StageView = original ? "frame" : p.view === "sheet" && !sheet ? "frame" : p.view;
+  // After a successful auto-frame the same button reads "Re-frame".
+  const reframed = p.frameNote?.tone === "ok";
   return (
     <section className="stage" aria-label="Photo preview">
       <div className="stage-toolbar">
@@ -62,19 +77,21 @@ export function Stage(p: StageProps) {
           <div className="segmented" role="group" aria-label="Preview">
             {(
               [
-                ["frame", "Frame"],
-                ["sheet", "Sheet"],
-                ["compare", "Before / after"],
-              ] as [StageView, string][]
-            ).map(([id, label]) => (
+                ["frame", "Frame", CropIcon],
+                ["sheet", "Sheet", LayoutGrid],
+                ["compare", "Before / after", Columns2],
+              ] as const
+            ).map(([id, label, Icon]) => (
               <button
                 key={id}
                 className={view === id ? "active" : ""}
                 aria-pressed={view === id}
+                title={label}
                 disabled={p.busy || (id === "compare" && p.photo.bytesOnly)}
                 onClick={() => p.onView(id)}
               >
-                {label}
+                <Icon size={16} aria-hidden="true" />
+                <span className="btn-label">{label}</span>
               </button>
             ))}
           </div>
@@ -82,29 +99,36 @@ export function Stage(p: StageProps) {
         <div className="stage-actions">
           {framing && (
             <button
-              className="secondary small-button"
+              className="secondary small-button tool-toggle"
               aria-pressed={p.guides}
+              title={p.guides ? "Hide the size guides" : "Show the size guides"}
               onClick={() => p.onGuides(!p.guides)}
             >
-              Guides {p.guides ? "on" : "off"}
+              <Grid3x3 size={15} aria-hidden="true" />
+              <span className="btn-label">Guides</span>
             </button>
           )}
           {!original && (
             <button
               className="secondary small-button"
               disabled={p.busy || p.photo.bytesOnly}
+              title={reframed ? "Run auto-frame again" : "Find the face and frame the photo"}
               onClick={p.onAutoFrame}
             >
-              <ScanFace size={15} aria-hidden="true" /> Auto-frame
+              <ScanFace size={15} aria-hidden="true" />
+              <span className="btn-label">{reframed ? "Re-frame" : "Auto-frame"}</span>
             </button>
           )}
           {!original && (
             <button
               className="secondary small-button"
               disabled={!p.canUndo || p.busy}
+              aria-label="Undo position"
+              title="Undo position"
               onClick={p.onUndo}
             >
-              <Undo2 size={14} aria-hidden="true" /> Undo position
+              <Undo2 size={14} aria-hidden="true" />
+              <span className="btn-label">Undo</span>
             </button>
           )}
         </div>
@@ -127,7 +151,10 @@ export function Stage(p: StageProps) {
         </div>
       ) : (
         p.frameNote && (
-          <div className={`frame-note ${p.frameNote.tone}`} role="status">
+          <div
+            className={`frame-note ${p.frameNote.tone}${p.frameNote.tone === "warn" ? "" : " frame-note--after"}`}
+            role="status"
+          >
             {p.frameNote.tone === "ok" ? (
               <Check size={16} aria-hidden="true" />
             ) : p.frameNote.tone === "warn" ? (
@@ -202,23 +229,24 @@ export function Stage(p: StageProps) {
           </button>
           <output className="zoom-value">{Math.round(p.zoom * 100)}%</output>
           <button className="secondary small-button" disabled={p.busy} onClick={p.onReset}>
-            <RotateCcw size={13} aria-hidden="true" /> Reset
+            <RotateCcw size={13} aria-hidden="true" />
+            <span className="btn-label">Reset</span>
           </button>
         </div>
       )}
 
       <div className="stage-foot">
-        <span>
+        <span className="stage-hint">
           {original
             ? `Original file, unchanged. Nothing is cropped or edited.${p.photo.width > 0 ? ` ${p.photo.width} × ${p.photo.height} px.` : ""}`
             : sheet && view === "sheet"
-              ? `${paper?.name ?? "4 × 6 in"} sheet · ${sheet.placements.length} ${sheet.placements.length === 1 ? "photo" : "photos"}. Paper and layout are set under Print sheet.`
+              ? `${paper?.name ?? "4 × 6 in"} sheet, ${sheet.placements.length} ${sheet.placements.length === 1 ? "photo" : "photos"}. ${sheet.style === "edge-to-edge" ? "Cut along the pale lines." : "Cut along the corner marks."}`
               : view === "compare"
-                ? "The original next to your framed photo."
+                ? ""
                 : "Drag to move · scroll or pinch to zoom · arrow keys nudge 0.1 mm · ruler in mm from the bottom"}
         </span>
         {p.photo.isDemo ? (
-          <span className="demo-badge">Synthetic demo · not for applications</span>
+          <span className="demo-badge">Demo photo, not for applications</span>
         ) : (
           <span className="file-name">
             {p.photo.name.length > 32 ? `${p.photo.name.slice(0, 29)}…` : p.photo.name}

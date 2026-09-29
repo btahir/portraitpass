@@ -330,21 +330,19 @@ export function OutputPanel({
   };
 
   const Heading = `h${headingLevel}` as "h2" | "h3";
-  const printNotes = !isOriginal
-    ? (preset.notes ?? []).filter((note) => /print/i.test(note))
-    : [];
   const copies = doc?.print?.copies;
   const stock = doc?.print?.paper;
   const backgroundWarning =
     !isOriginal && activeBackground && preset.backgroundEdit !== "allowed"
       ? preset.backgroundEdit === "forbidden"
-        ? `Background replaced. ${preset.name} does not accept edited photos.`
-        : `Background replaced. Check that the receiver accepts this for ${preset.name}.`
+        ? `Background edited. Not accepted for ${preset.name}.`
+        : `Background edited. Check that the receiver accepts this for ${preset.name}.`
       : "";
 
   const disclaimer = (
     <p className="op-disclaimer">{DOWNLOAD_NOTE}</p>
   );
+  const alert = backgroundWarning ? <p className="op-alert">{backgroundWarning}</p> : null;
   const gentleNote =
     !isOriginal && (checksSummary.failing > 0 || checksSummary.unknown > 0) ? (
       <p className="op-gentle">
@@ -355,50 +353,47 @@ export function OutputPanel({
           `${plural(checksSummary.unknown, "check")} could not be measured.`}
       </p>
     ) : null;
-  const printLines: ReactNode = (
-    <>
-      {printNotes.map((note) => (
-        <p key={note} className="op-note">
-          {note}
-        </p>
-      ))}
-      {(copies || (stock && !printNotes.length)) && (
-        <p className="op-note">
-          The rules ask for{" "}
-          {copies ? `${copies} ${copies === 1 ? "copy" : "copies"}` : "prints"}
-          {stock ? ` on ${stock}` : ""}.
-        </p>
-      )}
-    </>
-  );
+  // The document's own print notes live in the document card; only the copy count sits by the button.
+  const printLines: ReactNode = copies ? (
+    <p className="op-note">
+      The rules ask for {copies} {copies === 1 ? "copy" : "copies"}
+      {stock ? ` on ${stock}` : ""}.
+    </p>
+  ) : null;
 
   return (
     <section className="op" aria-label="Download">
       <Heading className="op-title">Download</Heading>
-      <div className="op-tabs" role="tablist" aria-label="Download type">
-        {tabs.map((id) => (
-          <button
-            key={id}
-            id={`${uid}-tab-${id}`}
-            type="button"
-            role="tab"
-            className="op-tab"
-            aria-selected={tab === id}
-            aria-controls={`${uid}-panel`}
-            tabIndex={tab === id ? 0 : -1}
-            onClick={() => setPicked(id)}
-            onKeyDown={onTabKey}
-          >
-            {TAB_LABEL[id]}
-          </button>
-        ))}
-      </div>
+      {tabs.length > 1 && (
+        <div className="op-tabs" role="tablist" aria-label="Download type">
+          {tabs.map((id) => (
+            <button
+              key={id}
+              id={`${uid}-tab-${id}`}
+              type="button"
+              role="tab"
+              className="op-tab"
+              aria-selected={tab === id}
+              aria-controls={`${uid}-panel`}
+              tabIndex={tab === id ? 0 : -1}
+              onClick={() => setPicked(id)}
+              onKeyDown={onTabKey}
+            >
+              {TAB_LABEL[id]}
+            </button>
+          ))}
+        </div>
+      )}
       <div
         className="op-panel"
-        role="tabpanel"
-        id={`${uid}-panel`}
-        aria-labelledby={`${uid}-tab-${tab}`}
-        tabIndex={0}
+        {...(tabs.length > 1
+          ? {
+              role: "tabpanel",
+              id: `${uid}-panel`,
+              "aria-labelledby": `${uid}-tab-${tab}`,
+              tabIndex: 0,
+            }
+          : {})}
       >
         {tab === "sheet" && (
           <>
@@ -524,6 +519,7 @@ export function OutputPanel({
               busy={busy}
               disabled={!sheet.layout || sheetTooLarge}
               onClick={() => void run("sheet")}
+              alert={alert}
               disclaimer={disclaimer}
             />
           </>
@@ -563,6 +559,7 @@ export function OutputPanel({
               label="Download photo"
               busy={busy}
               onClick={() => void run("single")}
+              alert={alert}
               disclaimer={disclaimer}
             />
           </>
@@ -584,6 +581,7 @@ export function OutputPanel({
               label="Download digital photo"
               busy={busy}
               onClick={() => void run("digital")}
+              alert={alert}
               disclaimer={disclaimer}
             />
           </>
@@ -595,8 +593,7 @@ export function OutputPanel({
               <div>
                 <p className="op-count">Your original file, unchanged</p>
                 <p className="op-sub">
-                  No crop, resize or edit. The application positions the photo
-                  itself.
+                  The application positions the photo itself.
                 </p>
               </div>
             </div>
@@ -609,26 +606,17 @@ export function OutputPanel({
                   {photo.width > 0 && `, ${photo.width} × ${photo.height} px`}
                 </dd>
               </div>
-              {(preset.mimeTypes?.length ||
-                preset.minBytes ||
-                preset.maxBytes) && (
-                <div>
-                  <dt>Accepted</dt>
-                  <dd>{acceptedText(preset, doc?.digital?.kbBytes ?? 1000)}</dd>
-                </div>
-              )}
             </dl>
-            {doc?.diyNote && <p className="op-note">{doc.diyNote}</p>}
             <DownloadRow
               label="Download original"
               busy={busy}
               onClick={() => void run("original")}
+              alert={alert}
               disclaimer={disclaimer}
             />
           </>
         )}
 
-        {backgroundWarning && <p className="op-alert">{backgroundWarning}</p>}
         {failure && (
           <p className="op-alert" role="alert">
             {failure.lead && <strong>{failure.lead} </strong>}
@@ -701,32 +689,25 @@ function digitalTargetText(t: DigitalTarget) {
   return size;
 }
 
-function acceptedText(preset: Preset, unit: 1000 | 1024) {
-  const types = [
-    ...new Set((preset.mimeTypes ?? []).map((m) => MIME_LABEL[m] ?? m)),
-  ].join(", ");
-  const min = preset.minBytes ? formatBytes(preset.minBytes, unit) : "";
-  const max = preset.maxBytes ? formatBytes(preset.maxBytes, unit) : "";
-  const size =
-    min && max ? `${min} to ${max}` : max ? `up to ${max}` : min ? `at least ${min}` : "";
-  return [types, size].filter(Boolean).join(", ");
-}
-
 function DownloadRow({
   label,
   busy,
   disabled,
   onClick,
+  alert,
   disclaimer,
 }: {
   label: string;
   busy: boolean;
   disabled?: boolean;
   onClick(): void;
+  /** A warning that belongs right above the button, where the decision to download is made. */
+  alert?: ReactNode;
   disclaimer: ReactNode;
 }) {
   return (
     <div className="op-action">
+      {alert}
       <button
         type="button"
         className="op-primary"

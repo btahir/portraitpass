@@ -30,21 +30,22 @@
 }
 
 /* ---------- Home layout ---------- */
+/* Same measure and gutters as the site header (.wrap), so the left edges line up. */
 .hm {
-  max-width: 1440px;
+  max-width: 1360px;
   margin: 0 auto;
-  padding: 0 54px 40px;
+  padding: 0 32px 40px;
 }
 .hm-hero {
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
   gap: 64px;
-  align-items: start;
+  align-items: stretch;
   padding: 40px 0 72px;
 }
 .hm h1 {
   margin: 0;
-  font: 400 clamp(44px, 6vw, 72px) / 1 "Instrument Serif", Georgia, serif;
+  font: 400 clamp(44px, 5vw, 64px) / 1 "Instrument Serif", Georgia, serif;
   letter-spacing: -0.01em;
   text-wrap: balance;
 }
@@ -152,8 +153,11 @@
 /* ---------- Proof panel ---------- */
 .hm-proof {
   margin: 0;
+  display: flex;
+  flex-direction: column;
 }
 .hm-proof-stage {
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -165,7 +169,7 @@
 }
 .hm-sheet {
   flex: none;
-  width: 240px;
+  width: 300px;
   aspect-ratio: 2 / 3;
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -180,7 +184,9 @@
 }
 .hm-price {
   margin: 0;
-  width: 200px;
+  flex: 1;
+  min-width: 0;
+  max-width: 260px;
 }
 .hm-price dt {
   font-size: 12px;
@@ -193,8 +199,9 @@
   margin: 0;
 }
 .hm-price-main dd {
+  white-space: nowrap;
   margin-top: 8px;
-  font: 400 52px / 1 "Instrument Serif", Georgia, serif;
+  font: 400 60px / 1 "Instrument Serif", Georgia, serif;
   letter-spacing: -0.01em;
 }
 .hm-price-row {
@@ -295,21 +302,21 @@
 }
 .hm-list--num li {
   position: relative;
-  padding-left: 34px;
+  padding-inline-start: 34px;
 }
 .hm-list--num li::before {
   counter-increment: n;
   content: counter(n);
   position: absolute;
-  left: 0;
+  inset-inline-start: 0;
   top: 8px;
   font: 400 22px / 1.2 "Instrument Serif", Georgia, serif;
   color: var(--accent);
 }
 .hm-note {
   margin-top: 24px !important;
-  padding-left: 14px;
-  border-left: 3px solid var(--accent);
+  padding-inline-start: 14px;
+  border-inline-start: 3px solid var(--accent);
   font-size: 14px !important;
   color: var(--ink) !important;
 }
@@ -343,7 +350,7 @@
 .hm-docs span {
   font-size: 13.5px;
   color: var(--muted);
-  text-align: right;
+  text-align: end;
 }
 .hm-docs--why li {
   display: block;
@@ -351,7 +358,7 @@
 .hm-docs--why span {
   display: block;
   margin-top: 2px;
-  text-align: left;
+  text-align: start;
   line-height: 1.45;
 }
 .hm-more {
@@ -413,6 +420,12 @@
   outline-offset: 2px;
   border-color: var(--ink);
 }
+/* The field draws the one focus ring; the input inside must not draw a second. */
+.dp-field input:focus,
+.dp-field input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
 .dp-field input {
   flex: 1;
   min-width: 0;
@@ -433,8 +446,7 @@
   position: absolute;
   z-index: 30;
   top: 58px;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   margin: 0;
   padding: 4px 0;
   list-style: none;
@@ -457,10 +469,11 @@
   padding: 10px 14px;
   cursor: pointer;
   font-size: 15px;
+  border-inline-start: 3px solid transparent;
 }
 .dp-opt.is-active {
   background: var(--soft);
-  box-shadow: inset 3px 0 0 var(--accent);
+  border-inline-start-color: var(--accent);
 }
 .dp-name {
   font-weight: 600;
@@ -595,7 +608,7 @@
 .nd-table td {
   padding: 9px 0;
   border-top: 1px solid var(--line);
-  text-align: left;
+  text-align: start;
   vertical-align: top;
 }
 .nd-table tr:last-child th,
@@ -604,7 +617,7 @@
 }
 .nd-table th {
   width: 38%;
-  padding-right: 16px;
+  padding-inline-end: 16px;
   font-weight: 500;
   color: var(--muted);
 }
@@ -690,10 +703,10 @@
     padding: 36px 24px;
   }
   .hm-sheet {
-    width: 180px;
+    width: 220px;
   }
   .hm-price {
-    width: 160px;
+    width: auto;
   }
   .hm-steps {
     gap: 24px;
@@ -713,9 +726,14 @@
     min-height: 0;
   }
 }
+@media (max-width: 820px) {
+  .hm {
+    padding-inline: 16px;
+  }
+}
 @media (max-width: 640px) {
   .hm {
-    padding: 0 20px 24px;
+    padding: 0 16px 24px;
   }
   .hm-lede {
     font-size: 17px;
@@ -744,6 +762,14 @@
   }
   .dp-chip small {
     display: none;
+  }
+  /* Four chips and "All N" on a phone; the rest are one search away. */
+  .dp-chips .dp-chip:nth-child(n + 5):not(.dp-chip--link) {
+    display: none;
+  }
+  .dp-chip {
+    min-height: 44px;
+    align-items: center;
   }
   .hm-steps,
   .hm-cols,

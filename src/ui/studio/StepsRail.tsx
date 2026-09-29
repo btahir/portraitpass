@@ -17,6 +17,7 @@ export function StepsRail({ current }: { current: 1 | 2 | 3 | 4 }) {
           >
             <i aria-hidden="true">{state === "done" ? <Check size={13} strokeWidth={2.5} /> : n}</i>
             <span>{label}</span>
+            {state === "now" && <span className="step-of">{n} of {STEPS.length}</span>}
             {state === "done" && <span className="visually-hidden"> (done)</span>}
           </li>
         );

@@ -131,7 +131,7 @@
   color: var(--muted);
 }
 .op-seg button + button {
-  border-left: 1px solid var(--line);
+  border-inline-start: 1px solid var(--line);
 }
 .op-seg button[aria-pressed="true"] {
   background: var(--soft);
@@ -177,8 +177,8 @@
 }
 .op-gentle {
   color: var(--ink);
-  border-left: 2px solid var(--sage);
-  padding-left: 10px;
+  border-inline-start: 2px solid var(--sage);
+  padding-inline-start: 10px;
 }
 .op-action {
   display: flex;
@@ -190,7 +190,7 @@
   min-height: 46px;
   padding: 11px 16px;
   background: var(--accent);
-  color: #fffaf1;
+  color: var(--accent-ink);
   border: 1px solid var(--accent);
   font-size: 14px;
   font-weight: 600;
@@ -198,10 +198,6 @@
 .op-primary:hover:not(:disabled) {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
-}
-.dark .op-primary,
-:root[data-theme="dark"] .op-primary {
-  color: #16272c;
 }
 .op-disclaimer {
   margin: 0;
@@ -213,7 +209,7 @@
   font-size: 13px;
   padding: 9px 12px;
   border: 1px solid var(--accent);
-  border-left-width: 3px;
+  border-inline-start-width: 3px;
   border-radius: 4px;
   background: var(--surface);
 }
@@ -254,7 +250,7 @@
 }
 .op-guide ol {
   margin: 0 0 10px;
-  padding-left: 20px;
+  padding-inline-start: 20px;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -271,9 +267,6 @@
 }
 .op-link:hover {
   color: var(--accent-hover);
-}
-.dark .op-link {
-  color: var(--accent);
 }
 @media (prefers-reduced-motion: no-preference) {
   .op-tab,
