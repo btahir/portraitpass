@@ -1,6 +1,8 @@
 # Third-party notices
 
-Generated from the installed lockfile on 2026-09-28. Licenses below cover development and runtime dependencies. Bundled models/fonts have notices in public/licenses and CREDITS.md.
+Generated from the installed lockfile on 2026-09-28. Licenses below cover development and runtime dependencies. Bundled models/fonts have notices in public/licenses and CREDITS.md. The table also covers the Node CLI, MCP server and test tooling, which are not part of the static site bundle.
+
+PortraitPass is an independent open-source project, not affiliated with or endorsed by any government or passport office.
 
 | Package | Version | License |
 |---|---|---|

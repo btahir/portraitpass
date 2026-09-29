@@ -10,6 +10,7 @@ import {
   FileDown,
   FolderOpen,
   Heart,
+  HelpCircle,
   ImagePlus,
   LockKeyhole,
   Maximize,
@@ -19,6 +20,7 @@ import {
   ShieldCheck,
   Sparkles,
   Sun,
+  TriangleAlert,
   Upload,
   X,
   LoaderCircle,
@@ -33,7 +35,10 @@ import {
   cropIssues,
   outputSize,
   layoutSheet,
-  headMeasurement,
+  DOCUMENT_NOTICES,
+  backgroundWarning,
+  measurementChecks,
+  landmarksValid,
   type Crop,
   type Preset,
   type Landmarks,
@@ -48,45 +53,107 @@ import {
   autoCrop,
   prepareBackground,
   warmExportTools,
+  HEIC_UNSUPPORTED_MESSAGE,
+  HEIC_PRINT_MESSAGE,
+  isHeifPhoto,
   saveProject,
   openProject,
   type LoadedPhoto,
 } from "../browser/engine";
-import { SUPPORT_URL, DONATION_LINKS } from "../config";
+import {
+  SUPPORT_URL,
+  DONATION_LINKS,
+  DISCLAIMER,
+  DOWNLOAD_NOTE,
+  FACE_NOTICE,
+} from "../config";
+import {
+  CHECK_LABELS,
+  checkRange,
+  checkValue,
+  sourceLabel,
+  statusWord,
+} from "./checks";
+import { AccessibilityPage, PrivacyPage, TermsPage } from "./pages";
 import "./styles.css";
 
 type View = "single" | "sheet" | "compare";
 type Format = "jpeg" | "png" | "pdf";
+const DEFAULT_CUSTOM = { widthMm: 35, heightMm: 45 };
+const COMMIT_DELAY = 450;
 const keywordPages: Record<
   string,
-  { title: string; description: string; preset: string; sheet?: boolean }
+  {
+    title: string;
+    h1: [string, string];
+    description: string;
+    preset: string;
+    sheet?: boolean;
+  }
 > = {
   "/us-passport-photo/": {
-    title: "US passport photos, at 2 × 2 inches.",
+    title: "What to know about the 2 × 2 inch photo",
+    h1: ["US passport photo,", "2×2 inches"],
     description:
-      "Prepare a square 2 × 2 inch photo with visible head guides and a 600 × 600 pixel export at 300 DPI. Keep your natural appearance, use an appropriate original photograph, and check the current State Department instructions before printing.",
+      "Prepare a square 2 × 2 inch photo with visible head and eye guides and a 600 × 600 pixel export at 300 DPI. Keep your natural appearance, have someone else take the photo or use a tripod, and check the State Department’s current instructions before printing.",
     preset: "us-passport",
   },
   "/uk-passport-photo/": {
-    title: "A properly sized UK passport print.",
+    title: "What to know about the UK 35 × 45 mm photo",
+    h1: ["UK passport photo,", "35×45 mm"],
     description:
-      "Make a 35 × 45 mm printed photo with crown-to-chin guides for the UK’s 29–34 mm head range. Applying online? Select UK passport · original to keep your file unedited: the UK says not to crop digital application photos.",
+      "Make a 35 × 45 mm printed photo with crown-to-chin guides for the UK’s 29–34 mm head range. Paper applications need a professionally printed photo. Applying online? Select UK passport · original to keep your file unedited: the UK says not to crop digital application photos.",
     preset: "uk-passport",
   },
   "/35x45-photo/": {
-    title: "Your photo. Exactly 35 × 45 mm.",
+    title: "Exact 35 × 45 mm, without stretching",
+    h1: ["35×45 mm photo,", "sized exactly"],
     description:
-      "Prepare a 35 × 45 mm photograph without stretching the image. Choose a verified document format or general ID, then position your photo and export at 300 DPI. Dimensions alone do not establish whether a photo meets the receiving organisation’s requirements.",
+      "Prepare a 35 × 45 mm photograph without stretching the image. Choose a document format or general ID, then position your photo and export at 300 DPI. Dimensions alone do not establish whether a photo meets the receiving organisation’s requirements.",
     preset: "uk-passport",
   },
   "/passport-photo-print-sheet/": {
-    title: "A print sheet that makes sense.",
+    title: "Print at actual size, with cut marks",
+    h1: ["Passport photos on a", "4×6 print sheet"],
     description:
       "Arrange precisely sized passport photos on 4 × 6 inch paper with safe margins and cut marks. Download a PDF with an exact physical page size, then print at 100% or actual size. Turn off “fit to page” and check the dimensions with a ruler.",
     preset: "us-passport",
     sheet: true,
   },
 };
+const sameCrop = (a: Crop, b: Crop) =>
+  a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height;
+/** Keep crown < eyes < chin, at least `gap` apart, inside the photo. `moved` wins. */
+function orderLandmarks(
+  l: Landmarks,
+  height: number,
+  moved: "crownY" | "eyesY" | "chinY" | null = null,
+): Landmarks {
+  const gap = height * 0.01;
+  let { crownY, eyesY, chinY } = l;
+  const clamp = (v: number, lo: number, hi: number) =>
+    Math.max(lo, Math.min(hi, v));
+  if (moved === "crownY") {
+    crownY = clamp(crownY, 0, height - 2 * gap);
+    eyesY = Math.max(eyesY, crownY + gap);
+    chinY = Math.max(chinY, eyesY + gap);
+  } else if (moved === "chinY") {
+    chinY = clamp(chinY, 2 * gap, height);
+    eyesY = Math.min(eyesY, chinY - gap);
+    crownY = Math.min(crownY, eyesY - gap);
+  }
+  // Whichever value moved, the order is now settled around the eyes.
+  eyesY = clamp(eyesY, gap, height - gap);
+  crownY = clamp(Math.min(crownY, eyesY - gap), 0, height);
+  chinY = clamp(Math.max(chinY, eyesY + gap), 0, height);
+  return { ...l, crownY, eyesY, chinY };
+}
+/** Only width and height ever come from the custom size. */
+function withCustomSize(p: Preset, size: { widthMm: number; heightMm: number }) {
+  return p.mode === "general"
+    ? { ...p, widthMm: size.widthMm, heightMm: size.heightMm }
+    : p;
+}
 function normalizePath(path: string) {
   return path === "/" ? path : `${path.replace(/\/+$/, "")}/`;
 }
@@ -136,6 +203,7 @@ function Slider({
   display,
   disabled = false,
   onChange,
+  onCommit,
 }: {
   disabled?: boolean;
   label: string;
@@ -145,8 +213,18 @@ function Slider({
   step?: number;
   display?: string;
   onChange: (value: number) => void;
+  /** Called once a drag has ended, or a burst of key presses has settled. */
+  onCommit?: () => void;
 }) {
   const id = label.toLowerCase().replace(/[^a-z0-9]/g, "-");
+  const held = useRef(false);
+  const timer = useRef<number | undefined>(undefined);
+  const commit = useCallback(() => {
+    window.clearTimeout(timer.current);
+    timer.current = undefined;
+    onCommit?.();
+  }, [onCommit]);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
   return (
     <div className="slider-field">
       <div className="slider-title">
@@ -162,7 +240,25 @@ function Slider({
         max={max}
         step={step}
         value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
+        onPointerDown={() => {
+          held.current = true;
+          const release = () => {
+            window.removeEventListener("pointerup", release);
+            window.removeEventListener("pointercancel", release);
+            held.current = false;
+            commit();
+          };
+          window.addEventListener("pointerup", release);
+          window.addEventListener("pointercancel", release);
+        }}
+        onBlur={commit}
+        onChange={(event) => {
+          onChange(Number(event.target.value));
+          if (!held.current) {
+            window.clearTimeout(timer.current);
+            timer.current = window.setTimeout(commit, COMMIT_DELAY);
+          }
+        }}
       />
     </div>
   );
@@ -181,7 +277,7 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
   );
   const [photo, setPhoto] = useState<LoadedPhoto | null>(null);
   const [presetId, setPresetId] = useState(keyword?.preset ?? "us-passport");
-  const [customSize, setCustomSize] = useState({ widthMm: 35, heightMm: 45 });
+  const [customSize, setCustomSize] = useState(DEFAULT_CUSTOM);
   const [customDraft, setCustomDraft] = useState({
     widthMm: "35",
     heightMm: "45",
@@ -194,10 +290,12 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
   }, [customSize]);
   const preset = useMemo(() => {
     const p = PRESETS.find((item) => item.id === presetId) ?? PRESETS[0]!;
-    return p.mode === "general" ? { ...p, ...customSize } : p;
+    return withCustomSize(p, customSize);
   }, [presetId, customSize]);
   const [crop, setCrop] = useState<Crop | null>(null);
   const [landmarks, setLandmarks] = useState<Landmarks | null>(null);
+  // False while the head positions are only rough defaults nobody has set.
+  const [landmarksSet, setLandmarksSet] = useState(false);
   const [view, setView] = useState<View>(keyword?.sheet ? "sheet" : "single");
   const [paperId, setPaperId] = useState("4x6");
   const [format, setFormat] = useState<Format>("jpeg");
@@ -211,20 +309,38 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
   const [exported, setExported] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [history, setHistory] = useState<Crop[]>([]);
+  const historyRef = useRef<Crop[]>([]);
+  // The crop as it was before the drag, slider move or key burst now in progress.
+  const gestureRef = useRef<Crop | null>(null);
+  const [gestureOpen, setGestureOpen] = useState(false);
+  const commitTimer = useRef<number | undefined>(undefined);
+  const pointersRef = useRef(new Map<number, { x: number; y: number }>());
+  const anchorRef = useRef<{
+    crop: Crop;
+    x: number;
+    y: number;
+    dist: number;
+    width: number;
+  } | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const projectRef = useRef<HTMLInputElement>(null);
   const photoRef = useRef<LoadedPhoto | null>(null);
   const cropRef = useRef<Crop | null>(null);
   const versionRef = useRef(0);
-  const dragRef = useRef<{
-    x: number;
-    y: number;
-    crop: Crop;
-    scale: number;
-  } | null>(null);
   cropRef.current = crop;
   const isOriginal = preset.mode === "original";
+  // HEIC/HEIF is only for original mode: passed through untouched, never decoded for prints.
+  const heicPhoto = !!photo && isHeifPhoto(photo);
+  // iOS Safari converts a HEIC to JPEG unless the input lists it, which would break the print flow,
+  // so HEIC is offered only where the selected document takes it as-is.
+  const acceptsHeic = isOriginal && !!preset.mimeTypes?.includes("image/heic");
+  /** A HEIC photo only fits an original-mode document that lists its type. */
+  const heicFits = (item: { mode: string; mimeTypes?: string[] }) =>
+    !photo || !heicPhoto || (item.mode === "original" && !!item.mimeTypes?.includes(photo.mime));
+  const fileAccept = acceptsHeic
+    ? "image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif"
+    : "image/jpeg,image/png,image/webp";
   const size = useMemo(() => outputSize(preset, dpi), [preset, dpi]);
   const sheet = useMemo(() => {
     if (isOriginal) return null;
@@ -235,9 +351,12 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
     }
   }, [preset, paperId, isOriginal, dpi]);
   const issues =
-    photo && crop
-      ? cropIssues(crop, photo.width, photo.height, preset, dpi)
+    photo && crop && !photo.bytesOnly
+      ? // Eye-line and head range are shown as measurements, not used to block downloads.
+        cropIssues(crop, photo.width, photo.height, preset, dpi)
       : [];
+  if (photo?.bytesOnly && !isOriginal)
+    issues.push({ code: "HEIC_UNSUPPORTED", message: HEIC_UNSUPPORTED_MESSAGE });
   if (photo && isOriginal) {
     if (preset.mimeTypes && !preset.mimeTypes.includes(photo.file.type))
       issues.push({
@@ -253,28 +372,81 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
         message: `Original file must be ${Math.round((preset.minBytes ?? 0) / 1000)} KB–${Math.round((preset.maxBytes ?? 0) / 1000000)} MB. Choose another original.`,
       });
     if (
-      (preset.minWidth && photo.width < preset.minWidth) ||
-      (preset.minHeight && photo.height < preset.minHeight)
+      photo.width > 0 &&
+      ((preset.minWidth && photo.width < preset.minWidth) ||
+        (preset.minHeight && photo.height < preset.minHeight))
     )
       issues.push({
         code: "DIMENSIONS",
         message: `Original must be at least ${preset.minWidth} × ${preset.minHeight} pixels.`,
       });
   }
-  const measurement =
-    crop && landmarks && !isOriginal
-      ? headMeasurement(crop, preset, landmarks)
+  const checks = useMemo(
+    () =>
+      photo && crop && landmarks && !isOriginal
+        ? measurementChecks(
+            preset,
+            crop,
+            landmarksSet ? landmarks : undefined,
+            { width: photo.width, height: photo.height },
+            dpi,
+          )
+        : [],
+    [photo, crop, landmarks, landmarksSet, preset, isOriginal, dpi],
+  );
+  const baseCrop =
+    photo && photo.width > 0 && photo.height > 0
+      ? defaultCrop(photo.width, photo.height, preset)
       : null;
-  const baseCrop = photo
-    ? defaultCrop(photo.width, photo.height, preset)
-    : null;
   const zoom = crop && baseCrop ? baseCrop.width / crop.width : 1;
-  const setNextCrop = useCallback((next: Crop, remember = true) => {
-    if (remember && cropRef.current)
-      setHistory((previous) => [...previous.slice(-24), cropRef.current!]);
+  const clearHistory = useCallback(() => {
+    window.clearTimeout(commitTimer.current);
+    gestureRef.current = null;
+    historyRef.current = [];
+    setGestureOpen(false);
+    setHistory([]);
+  }, []);
+  /** Close the open gesture: one undo step for the whole drag, slider move or key burst. */
+  const commitGesture = useCallback(() => {
+    window.clearTimeout(commitTimer.current);
+    const start = gestureRef.current;
+    if (!start) return;
+    gestureRef.current = null;
+    setGestureOpen(false);
+    const now = cropRef.current;
+    if (now && !sameCrop(start, now)) {
+      historyRef.current = [...historyRef.current.slice(-24), start];
+      setHistory(historyRef.current);
+    }
+  }, []);
+  /** Move the crop as part of the current gesture, without adding an undo step yet. */
+  const liveCrop = useCallback((next: Crop) => {
+    if (!gestureRef.current && cropRef.current) {
+      gestureRef.current = cropRef.current;
+      setGestureOpen(true);
+    }
+    cropRef.current = next;
     setCrop(next);
     setExported(false);
   }, []);
+  const settleSoon = useCallback(() => {
+    window.clearTimeout(commitTimer.current);
+    commitTimer.current = window.setTimeout(commitGesture, COMMIT_DELAY);
+  }, [commitGesture]);
+  const setNextCrop = useCallback(
+    (next: Crop, remember = true) => {
+      commitGesture();
+      const before = cropRef.current;
+      if (remember && before && !sameCrop(before, next)) {
+        historyRef.current = [...historyRef.current.slice(-24), before];
+        setHistory(historyRef.current);
+      }
+      cropRef.current = next;
+      setCrop(next);
+      setExported(false);
+    },
+    [commitGesture],
+  );
 
   useEffect(() => {
     void warmExportTools().catch(() => {});
@@ -285,6 +457,7 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
   }, [dark]);
   useEffect(
     () => () => {
+      window.clearTimeout(commitTimer.current);
       if (photoRef.current) releasePhoto(photoRef.current);
     },
     [],
@@ -299,22 +472,30 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
       if (photoRef.current) releasePhoto(photoRef.current);
       photoRef.current = next;
       setPhoto(next);
-      setCrop(nextCrop ?? defaultCrop(next.width, next.height, nextPreset));
+      // A HEIC this browser cannot decode may not state its size; it is only ever passed through.
+      const startCrop =
+        nextCrop ??
+        defaultCrop(next.width || 1, next.height || 1, nextPreset);
+      cropRef.current = startCrop;
+      setCrop(startCrop);
       setLandmarks(
-        nextLandmarks ?? {
-          centerX: next.width / 2,
-          crownY: next.height * 0.18,
-          eyesY: next.height * 0.36,
-          chinY: next.height * 0.63,
-        },
+        nextLandmarks
+          ? orderLandmarks(nextLandmarks, next.height)
+          : {
+              centerX: next.width / 2,
+              crownY: next.height * 0.18,
+              eyesY: next.height * 0.36,
+              chinY: next.height * 0.63,
+            },
       );
+      setLandmarksSet(!!nextLandmarks);
       setBackground(undefined);
       setError("");
       setStatus("");
       setExported(false);
-      setHistory([]);
+      clearHistory();
     },
-    [preset],
+    [preset, clearHistory],
   );
   const importFile = useCallback(
     async (file: File) => {
@@ -327,6 +508,31 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
           releasePhoto(next);
           return;
         }
+        if (
+          isHeifPhoto(next) &&
+          !(preset.mode === "original" && preset.mimeTypes?.includes(next.mime))
+        ) {
+          // HEIC is only ever passed through untouched, so only a digital-original document can use
+          // it. Switch to the first one that takes this type; the crop is built for that document.
+          const original = PRESETS.find(
+            (item) =>
+              item.mode === "original" && item.mimeTypes?.includes(next.mime),
+          );
+          if (!original) {
+            releasePhoto(next);
+            setError(
+              next.bytesOnly ? HEIC_UNSUPPORTED_MESSAGE : HEIC_PRINT_MESSAGE,
+            );
+            return;
+          }
+          acceptPhoto(next, undefined, original);
+          setPresetId(original.id);
+          setView("single");
+          setStatus(
+            `${HEIC_PRINT_MESSAGE} Switched to ${original.name}, where the file is kept unchanged.`,
+          );
+          return;
+        }
         acceptPhoto(next);
       } catch (e) {
         if (version === versionRef.current) setError(messageOf(e));
@@ -334,7 +540,7 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
         if (version === versionRef.current) setBusy("");
       }
     },
-    [acceptPhoto],
+    [acceptPhoto, preset],
   );
   useEffect(() => {
     const paste = (event: ClipboardEvent) => {
@@ -349,6 +555,8 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
     window.addEventListener("paste", paste);
     return () => window.removeEventListener("paste", paste);
   }, [importFile, busy]);
+  const guideLandmarks =
+    guides && landmarksSet && landmarks ? landmarks : undefined;
   useEffect(() => {
     if (!photo || !crop || !canvasRef.current) return;
     try {
@@ -357,12 +565,24 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
         dpi,
         sheet: view === "sheet" && !isOriginal,
         guides: guides && view !== "sheet" && !isOriginal,
-        background,
+        background: isOriginal ? undefined : background,
+        landmarks: guideLandmarks,
       });
     } catch (e) {
       setError(messageOf(e));
     }
-  }, [photo, crop, preset, paperId, view, guides, background, isOriginal, dpi]);
+  }, [
+    photo,
+    crop,
+    preset,
+    paperId,
+    view,
+    guides,
+    background,
+    isOriginal,
+    dpi,
+    guideLandmarks,
+  ]);
 
   const sample = async () => {
     const version = ++versionRef.current;
@@ -394,12 +614,17 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
   };
   const selectPreset = (id: string) => {
     const next = PRESETS.find((item) => item.id === id)!;
-    const actual = next.mode === "general" ? { ...next, ...customSize } : next;
+    const actual = withCustomSize(next, customSize);
+    if (!heicFits(next)) {
+      setError(HEIC_PRINT_MESSAGE);
+      return;
+    }
     setPresetId(id);
-    if (photo) setCrop(defaultCrop(photo.width, photo.height, actual));
+    if (photo && !heicPhoto && baseCrop)
+      setNextCrop(defaultCrop(photo.width, photo.height, actual), false);
     if (next.mode === "original") setView("single");
     setBackground(undefined);
-    setHistory([]);
+    clearHistory();
     setExported(false);
     setError("");
     setStatus("");
@@ -419,22 +644,28 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
     const next = { ...customSize, [key]: value };
     setCustomSize(next);
     if (photo)
-      setCrop(defaultCrop(photo.width, photo.height, { ...preset, ...next }));
-    setHistory([]);
+      setNextCrop(
+        defaultCrop(photo.width, photo.height, { ...preset, ...next }),
+        false,
+      );
+    clearHistory();
     setExported(false);
     setError("");
   };
   const reset = () => {
-    if (photo) {
+    if (photo && !heicPhoto) {
       setNextCrop(defaultCrop(photo.width, photo.height, preset));
       setStatus("Position reset.");
     }
   };
   const undo = () => {
-    const previous = history.at(-1);
+    commitGesture();
+    const previous = historyRef.current.at(-1);
     if (previous) {
+      historyRef.current = historyRef.current.slice(0, -1);
+      setHistory(historyRef.current);
+      cropRef.current = previous;
       setCrop(previous);
-      setHistory((items) => items.slice(0, -1));
       setExported(false);
     }
   };
@@ -443,10 +674,12 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
     if (photoRef.current) releasePhoto(photoRef.current);
     photoRef.current = null;
     setPhoto(null);
+    cropRef.current = null;
     setCrop(null);
     setLandmarks(null);
+    setLandmarksSet(false);
     setBackground(undefined);
-    setHistory([]);
+    clearHistory();
     setExported(false);
     setError("");
     setStatus("");
@@ -461,7 +694,8 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
       const result = await autoCrop(photo, preset);
       if (operation !== versionRef.current) return;
       setNextCrop(result.crop);
-      setLandmarks(result.landmarks);
+      setLandmarks(orderLandmarks(result.landmarks, photo.height));
+      setLandmarksSet(true);
       setGuides(false);
       setManualGuides(true);
       setStatus(result.message);
@@ -483,8 +717,12 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
         format,
         dpi,
         sheet: view === "sheet",
-        landmarks: landmarks ?? undefined,
-        customSize: preset.mode === "general" ? customSize : undefined,
+        // Only head positions the user set (or face assist found) are saved, never the rough defaults.
+        landmarks: landmarksSet && !isOriginal && landmarks ? landmarks : undefined,
+        customSize:
+          preset.mode === "general"
+            ? { widthMm: customSize.widthMm, heightMm: customSize.heightMm }
+            : undefined,
       });
       if (operation !== versionRef.current) return;
       downloadBlob(blob, "portraitpass.project.json");
@@ -512,16 +750,34 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
         customSize?: { widthMm: number; heightMm: number };
         landmarks?: Landmarks;
       };
-      if (restored.customSize) setCustomSize(restored.customSize);
+      // Everything below comes from the project. Nothing carries over from the
+      // previous session, so an old custom size, DPI, paper or background cannot leak in.
+      setCustomSize(
+        restored.customSize
+          ? {
+              widthMm: restored.customSize.widthMm,
+              heightMm: restored.customSize.heightMm,
+            }
+          : DEFAULT_CUSTOM,
+      );
       setPresetId(result.presetId);
       setPaperId(result.paperId);
-      setView(result.sheet ? "sheet" : "single");
       setDpi(result.dpi);
-      if (["png", "jpeg", "pdf"].includes(result.format ?? ""))
-        setFormat(result.format as Format);
-      if (p.mode === "original") setView("single");
-      acceptPhoto(result.photo, result.crop, p, restored.landmarks);
-      setBackground(result.background);
+      setView(result.sheet && p.mode !== "original" ? "sheet" : "single");
+      setFormat(
+        ["png", "jpeg", "pdf"].includes(result.format ?? "")
+          ? (result.format as Format)
+          : "jpeg",
+      );
+      setGuides(false);
+      setManualGuides(false);
+      acceptPhoto(
+        result.photo,
+        result.crop,
+        withCustomSize(p, restored.customSize ?? DEFAULT_CUSTOM),
+        restored.landmarks,
+      );
+      setBackground(p.mode === "original" ? undefined : result.background);
       setStatus("Project restored. Your photo stays on this device.");
     } catch (e) {
       if (version === versionRef.current) setError(messageOf(e));
@@ -542,7 +798,7 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
         dpi,
         sheet: view === "sheet",
         paperId,
-        background,
+        background: isOriginal ? undefined : background,
       });
       if (operation !== versionRef.current) return;
       downloadBlob(result.blob, result.filename);
@@ -587,16 +843,76 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
       void (file.name.endsWith(".json") ? open(file) : importFile(file));
   };
   const adjustPosition = (axis: "x" | "y", percent: number) => {
-    if (!crop || !photo) return;
-    setNextCrop({
-      ...crop,
+    const current = cropRef.current;
+    if (!current || !photo) return;
+    liveCrop({
+      ...current,
       [axis]:
         ((axis === "x"
-          ? photo.width - crop.width
-          : photo.height - crop.height) *
+          ? photo.width - current.width
+          : photo.height - current.height) *
           percent) /
         100,
     });
+  };
+  /** Re-base the gesture on the pointers now down, so adding or lifting a finger never jumps. */
+  const anchorPointers = (canvas: HTMLCanvasElement) => {
+    const points = [...pointersRef.current.values()];
+    const current = cropRef.current;
+    if (!points.length || !current) {
+      anchorRef.current = null;
+      return;
+    }
+    anchorRef.current = {
+      crop: current,
+      x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
+      y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
+      dist:
+        points.length > 1
+          ? Math.hypot(points[0]!.x - points[1]!.x, points[0]!.y - points[1]!.y)
+          : 0,
+      width: canvas.getBoundingClientRect().width || 1,
+    };
+  };
+  const movePointers = () => {
+    const anchor = anchorRef.current;
+    if (!anchor || !photo || busy) return;
+    const points = [...pointersRef.current.values()];
+    if (!points.length) return;
+    const x = points.reduce((sum, point) => sum + point.x, 0) / points.length;
+    const y = points.reduce((sum, point) => sum + point.y, 0) / points.length;
+    let next = anchor.crop;
+    if (points.length > 1 && anchor.dist > 0 && baseCrop) {
+      const dist = Math.hypot(
+        points[0]!.x - points[1]!.x,
+        points[0]!.y - points[1]!.y,
+      );
+      // Spreading the fingers zooms in, up to the same 300% the slider allows.
+      const factor = Math.min(
+        Math.max(0.05, dist / anchor.dist),
+        anchor.crop.width / (baseCrop.width / 3),
+      );
+      next = zoomCrop(anchor.crop, factor, photo.width, photo.height);
+    }
+    const scale = next.width / anchor.width;
+    liveCrop(
+      clampCrop(
+        {
+          ...next,
+          x: next.x - (x - anchor.x) * scale,
+          y: next.y - (y - anchor.y) * scale,
+        },
+        photo.width,
+        photo.height,
+      ),
+    );
+  };
+  const releasePointer = (id: number, canvas: HTMLCanvasElement) => {
+    if (!pointersRef.current.delete(id)) return;
+    if (pointersRef.current.size === 0) {
+      anchorRef.current = null;
+      commitGesture();
+    } else anchorPointers(canvas);
   };
   const canvasKey = (event: React.KeyboardEvent<HTMLCanvasElement>) => {
     if (!crop || !photo || isOriginal || view === "sheet" || busy) return;
@@ -610,29 +926,43 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
     if (diff[event.key]) {
       event.preventDefault();
       const [x, y] = diff[event.key]!;
-      setNextCrop(
+      const current = cropRef.current ?? crop;
+      liveCrop(
         clampCrop(
-          { ...crop, x: crop.x + x, y: crop.y + y },
+          { ...current, x: current.x + x, y: current.y + y },
           photo.width,
           photo.height,
         ),
       );
+      settleSoon();
     }
   };
   const updateLandmark = (key: keyof Landmarks, value: number) => {
     if (!landmarks || !photo) return;
-    setLandmarks({
+    const moved = {
       ...landmarks,
       [key]: (value / 100) * (key === "centerX" ? photo.width : photo.height),
-    });
+    };
+    // Crown stays above the eyes and the eyes above the chin, so Fit can never fail on order.
+    setLandmarks(
+      key === "centerX"
+        ? moved
+        : orderLandmarks(moved, photo.height, key),
+    );
+    setLandmarksSet(true);
     setExported(false);
   };
   const applyLandmarks = () => {
     if (!photo || !landmarks) return;
     try {
+      if (!landmarksValid(landmarks, photo.width, photo.height))
+        throw new Error(
+          "Place crown, eyes and chin in that order inside the photo.",
+        );
       setNextCrop(
         cropFromLandmarks(photo.width, photo.height, preset, landmarks),
       );
+      setLandmarksSet(true);
       setStatus(
         "Head guides applied. Check the crown, eyes and chin against your photo.",
       );
@@ -642,6 +972,10 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
     }
   };
   const formatSize = `${preset.widthMm} × ${preset.heightMm} mm`;
+  const backgroundNote = isOriginal ? null : backgroundWarning(preset);
+  const printNotes = isOriginal
+    ? []
+    : (preset.notes ?? []).filter((note) => /print/i.test(note));
 
   return (
     <div
@@ -658,7 +992,7 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
         <Logo />
         <nav className="site-nav" aria-label="Main navigation">
           <a className="nav-about" href="/about/">
-            About & privacy
+            About
           </a>
           <a className="header-support" href={SUPPORT_URL}>
             <Heart size={13} /> Support the studio
@@ -679,7 +1013,7 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
         type="file"
         className="input-hidden"
         aria-label="Choose a photo"
-        accept="image/jpeg,image/png,image/webp"
+        accept={fileAccept}
         onChange={(event) => {
           const file = event.target.files?.[0];
           if (file) void importFile(file);
@@ -729,20 +1063,36 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
         <SupportPage />
       ) : path === "/about/" ? (
         <AboutPage />
+      ) : path === "/privacy/" ? (
+        <PrivacyPage />
+      ) : path === "/terms/" ? (
+        <TermsPage />
+      ) : path === "/accessibility/" ? (
+        <AccessibilityPage />
       ) : (
         <main id="main">
           {!photo ? (
             <>
               <section className="intro">
                 <div>
-                  <div className="eyebrow">
-                    A small photo. A world of possibility.
-                  </div>
-                  <h1>
-                    Places to go.
-                    <br />
-                    <em>A photo to match.</em>
-                  </h1>
+                  <div className="eyebrow">Free, in your browser</div>
+                  {keyword ? (
+                    <h1 className="keyword-h1">
+                      {keyword.h1[0]} <br />
+                      <em>{keyword.h1[1]}</em>
+                    </h1>
+                  ) : (
+                    <>
+                      <h1>
+                        Places to go.
+                        <br />
+                        <em>A photo to match.</em>
+                      </h1>
+                      <h2 className="intro-sub">
+                        Free passport photo maker, sized exactly
+                      </h2>
+                    </>
+                  )}
                   <p className="intro-copy">
                     Your next chapter starts here. Prepare a precisely sized
                     passport or ID photo, right in your browser.
@@ -763,7 +1113,7 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                     <p className="upload-hint">
                       or drop it here / paste from your clipboard
                       <br />
-                      JPG, PNG or WebP · up to 20 MB
+                      JPG, PNG, WebP or HEIC · up to 20 MB
                     </p>
                   </div>
                   <div className="upload-extra">
@@ -810,8 +1160,8 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                       height="272"
                     />
                     <div className="proof-footer">
-                      <span>PORTRAIT / 001</span>
                       <span>SYNTHETIC DEMO</span>
+                      <span>PORTRAIT / 001</span>
                     </div>
                   </div>
                   <div className="scene-tag">
@@ -860,7 +1210,7 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
               </div>
               <section className="how-section" aria-label="How it works">
                 <h2 className="how-title">
-                  A little care.
+                  A little care.{" "}
                   <br />A better photo.
                 </h2>
                 <div className="how-step">
@@ -894,7 +1244,11 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
               <div className="studio-heading">
                 <div>
                   <div className="eyebrow">Your private portrait studio</div>
-                  <h1>A good fit for what’s next.</h1>
+                  <h1>
+                    {keyword
+                      ? `${keyword.h1[0]} ${keyword.h1[1]}`
+                      : "A good fit for what’s next."}
+                  </h1>
                 </div>
                 <div className="studio-top-actions">
                   <button
@@ -943,7 +1297,11 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                       <optgroup label="Printed photographs">
                         {PRESETS.filter((item) => item.mode === "print").map(
                           (item) => (
-                            <option key={item.id} value={item.id}>
+                            <option
+                              key={item.id}
+                              value={item.id}
+                              disabled={!heicFits(item)}
+                            >
                               {item.name}
                             </option>
                           ),
@@ -952,16 +1310,39 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                       <optgroup label="Digital application originals">
                         {PRESETS.filter((item) => item.mode === "original").map(
                           (item) => (
-                            <option key={item.id} value={item.id}>
+                            <option
+                              key={item.id}
+                              value={item.id}
+                              disabled={!heicFits(item)}
+                            >
                               {item.name}
                             </option>
                           ),
                         )}
                       </optgroup>
                       <optgroup label="Other uses">
-                        <option value="general-id">General ID · custom</option>
+                        <option
+                          value="general-id"
+                          disabled={
+                            !heicFits(PRESETS.find((item) => item.id === "general-id")!)
+                          }
+                        >
+                          General ID · custom
+                        </option>
+                      </optgroup>
+                      <optgroup label="Can’t be made at home">
+                        {DOCUMENT_NOTICES.map((item) => (
+                          <option key={item.id} value={item.id} disabled>
+                            {item.name} · not available
+                          </option>
+                        ))}
                       </optgroup>
                     </select>
+                    {heicPhoto && (
+                      <p className="fine-print" id="heic-hint">
+                        HEIC photos work with US renewal · original only. For prints and other documents, use a JPEG.
+                      </p>
+                    )}
                     {!isOriginal ? (
                       <>
                         <div className="spec-summary">
@@ -1028,27 +1409,55 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                         <div>
                           <strong>Original, unchanged</strong>
                           <small>
-                            {photo.width} × {photo.height} px
+                            {photo.width && photo.height
+                              ? `${photo.width} × ${photo.height} px`
+                              : "Size not readable in this browser"}
                           </small>
                         </div>
                       </div>
                     )}
                     <p className="fine-print">{preset.editingPolicy}</p>
+                    {preset.notes && preset.notes.length > 0 && (
+                      <ul className="preset-notes" aria-label="Notes for this document">
+                        {preset.notes.map((note) => (
+                          <li key={note}>{note}</li>
+                        ))}
+                      </ul>
+                    )}
                     {preset.sourceUrl && (
                       <>
                         <a
-                          className="official-link"
+                          className="source-link"
                           href={preset.sourceUrl}
                           target="_blank"
                           rel="noreferrer"
                         >
-                          Official photo requirements <ExternalLink size={10} />
+                          {sourceLabel(preset)} <ExternalLink size={10} />
                         </a>
                         <p className="fine-print">
                           Requirements checked {preset.checkedAt}.
                         </p>
                       </>
                     )}
+                    <details className="doc-notices">
+                      <summary>
+                        Can’t be made at home ({DOCUMENT_NOTICES.length})
+                      </summary>
+                      <ul>
+                        {DOCUMENT_NOTICES.map((item) => (
+                          <li key={item.id}>
+                            <strong>{item.name}.</strong> {item.reason}{" "}
+                            <a
+                              href={item.sourceUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Source <ExternalLink size={9} />
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
                   </section>
                   <div className="control-divider" />
                   {!isOriginal ? (
@@ -1064,18 +1473,19 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                         max={3}
                         step={0.01}
                         display={`${Math.round(zoom * 100)}%`}
-                        onChange={(value) =>
-                          photo &&
-                          crop &&
-                          setNextCrop(
-                            zoomCrop(
-                              crop,
-                              value / zoom,
-                              photo.width,
-                              photo.height,
-                            ),
-                          )
-                        }
+                        onCommit={commitGesture}
+                        onChange={(value) => {
+                          const current = cropRef.current;
+                          if (photo && current)
+                            liveCrop(
+                              zoomCrop(
+                                current,
+                                baseCrop ? value / (baseCrop.width / current.width) : 1,
+                                photo.width,
+                                photo.height,
+                              ),
+                            );
+                        }}
                       />
                       <Slider
                         disabled={!!busy}
@@ -1085,6 +1495,7 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                             ? (crop.x / (photo.width - crop.width)) * 100
                             : 50
                         }
+                        onCommit={commitGesture}
                         onChange={(value) => adjustPosition("x", value)}
                       />
                       <Slider
@@ -1095,6 +1506,7 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                             ? (crop.y / (photo.height - crop.height)) * 100
                             : 50
                         }
+                        onCommit={commitGesture}
                         onChange={(value) => adjustPosition("y", value)}
                       />
                       <div className="controls-row">
@@ -1125,6 +1537,7 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                         <Sparkles size={12} />{" "}
                         {busy ? "Working…" : "Load local face assist"}
                       </button>
+                      <p className="assist-label">{FACE_NOTICE}</p>
                       <p className="assist-label">
                         Optional · about 12 MB of local tools.
                         <br />
@@ -1185,18 +1598,8 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                             </button>
                             <p className="fine-print">
                               Positions are percentages of the original photo.
-                              Set crown, eyes and chin in order.
-                              {measurement && (
-                                <>
-                                  {" "}
-                                  Current head:{" "}
-                                  {measurement.heightMm.toFixed(1)} mm
-                                  {preset.headMinMm
-                                    ? ` · target ${preset.headMinMm}–${preset.headMaxMm} mm`
-                                    : ""}
-                                  .
-                                </>
-                              )}
+                              Crown, eyes and chin stay in that order. The
+                              results appear under Measurements.
                             </p>
                           </>
                         )}
@@ -1213,16 +1616,17 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                       </span>
                     </div>
                   )}
-                  {preset.mode === "general" && (
+                  {!isOriginal && (
                     <section>
-                      <div className="panel-heading">
-                        Background · general ID only
-                      </div>
+                      <div className="panel-heading">Background</div>
                       <label className="check-control">
                         <input
                           type="checkbox"
                           checked={!!background}
                           disabled={!!busy}
+                          aria-describedby={
+                            backgroundNote ? "background-note" : undefined
+                          }
                           onChange={(event) => {
                             void changeBackground(
                               event.target.checked ? "#ffffff" : undefined,
@@ -1231,6 +1635,15 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                         />{" "}
                         Replace background locally
                       </label>
+                      {backgroundNote && (
+                        <p
+                          id="background-note"
+                          className={`background-note${preset.backgroundEdit === "forbidden" ? " warn" : ""}`}
+                        >
+                          <TriangleAlert size={12} aria-hidden="true" />
+                          <span>{backgroundNote}</span>
+                        </p>
+                      )}
                       {background && (
                         <>
                           <div className="color-options">
@@ -1247,8 +1660,7 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                           </div>
                           <p className="fine-print">
                             Uses local portrait segmentation (~12 MB), loaded
-                            only on request. Inspect hair and edges. Never used
-                            for passport modes.
+                            only on request. Inspect hair and edges.
                           </p>
                         </>
                       )}
@@ -1290,7 +1702,7 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                       <button
                         className={view === "compare" ? "active" : ""}
                         aria-pressed={view === "compare"}
-                        disabled={!!busy}
+                        disabled={!!busy || photo.bytesOnly}
                         onClick={() => setView("compare")}
                       >
                         Compare
@@ -1321,6 +1733,9 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                         >
                           <canvas
                             ref={canvasRef}
+                            className={
+                              !isOriginal && view !== "sheet" ? "interactive" : undefined
+                            }
                             aria-label={
                               isOriginal
                                 ? "Unedited original preview"
@@ -1336,54 +1751,41 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                                 !crop ||
                                 isOriginal ||
                                 view === "sheet" ||
-                                busy
+                                busy ||
+                                pointersRef.current.size >= 2
                               )
                                 return;
-                              event.currentTarget.setPointerCapture(
-                                event.pointerId,
-                              );
-                              dragRef.current = {
+                              try {
+                                event.currentTarget.setPointerCapture(
+                                  event.pointerId,
+                                );
+                              } catch {
+                                /* Pointer already gone; the gesture still tracks moves. */
+                              }
+                              pointersRef.current.set(event.pointerId, {
                                 x: event.clientX,
                                 y: event.clientY,
-                                crop,
-                                scale:
-                                  crop.width /
-                                  event.currentTarget.getBoundingClientRect()
-                                    .width,
-                              };
+                              });
+                              anchorPointers(event.currentTarget);
                             }}
                             onPointerMove={(event) => {
-                              const drag = dragRef.current;
-                              if (!drag || busy) return;
-                              setCrop(
-                                clampCrop(
-                                  {
-                                    ...drag.crop,
-                                    x:
-                                      drag.crop.x -
-                                      (event.clientX - drag.x) * drag.scale,
-                                    y:
-                                      drag.crop.y -
-                                      (event.clientY - drag.y) * drag.scale,
-                                  },
-                                  photo.width,
-                                  photo.height,
-                                ),
-                              );
-                              setExported(false);
+                              if (!pointersRef.current.has(event.pointerId))
+                                return;
+                              pointersRef.current.set(event.pointerId, {
+                                x: event.clientX,
+                                y: event.clientY,
+                              });
+                              movePointers();
                             }}
-                            onPointerUp={() => {
-                              const drag = dragRef.current;
-                              if (drag)
-                                setHistory((items) => [
-                                  ...items.slice(-24),
-                                  drag.crop,
-                                ]);
-                              dragRef.current = null;
-                            }}
-                            onPointerCancel={() => {
-                              dragRef.current = null;
-                            }}
+                            onPointerUp={(event) =>
+                              releasePointer(event.pointerId, event.currentTarget)
+                            }
+                            onPointerCancel={(event) =>
+                              releasePointer(event.pointerId, event.currentTarget)
+                            }
+                            onLostPointerCapture={(event) =>
+                              releasePointer(event.pointerId, event.currentTarget)
+                            }
                           />
                           {manualGuides &&
                             landmarks &&
@@ -1497,7 +1899,7 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                       </strong>
                       <p>
                         {isOriginal
-                          ? "The original file, ready for the official application’s own positioning tool."
+                          ? "The original file, ready for the application’s own positioning tool."
                           : view === "sheet"
                             ? `A ${PAPERS.find((p) => p.id === paperId)?.name} sheet, with precise cut marks and room at the edges.`
                             : `A ${formatSize} photo, rendered at ${dpi} DPI without stretching.`}
@@ -1566,6 +1968,7 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                           ? "Download print sheet"
                           : "Download photo"}
                     </button>
+                    <p className="fine-print download-note">{DOWNLOAD_NOTE}</p>
                     {issues.map((issue) => (
                       <p
                         key={issue.code}
@@ -1573,6 +1976,28 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                         style={{ color: "var(--accent)" }}
                       >
                         {issue.message}
+                      </p>
+                    ))}
+                    {background && !isOriginal && preset.backgroundEdit === "forbidden" && (
+                      <p className="export-warning">
+                        <TriangleAlert size={12} aria-hidden="true" />
+                        <span>
+                          Background edited — not accepted for {preset.name}.
+                        </span>
+                      </p>
+                    )}
+                    {background && !isOriginal && preset.backgroundEdit === "unspecified" && (
+                      <p className="export-warning">
+                        <TriangleAlert size={12} aria-hidden="true" />
+                        <span>
+                          Background edited. Check that the receiver accepts
+                          this for {preset.name}.
+                        </span>
+                      </p>
+                    )}
+                    {printNotes.map((note) => (
+                      <p key={note} className="fine-print print-note">
+                        {note}
                       </p>
                     ))}
                     <p className="fine-print" style={{ textAlign: "center" }}>
@@ -1583,13 +2008,72 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                         <strong>
                           <Check size={12} /> Your download is ready.
                         </strong>
-                        This little studio runs on support.
+                        Tips keep this little studio free.
                         <a className="support-inline" href={SUPPORT_URL}>
-                          Leave a little thank-you <Heart size={11} />
+                          Leave a tip <Heart size={11} />
                         </a>
                       </div>
                     )}
                   </section>
+                  {!isOriginal && checks.length > 0 && (
+                    <>
+                      <div className="control-divider" />
+                      <section
+                        className="check-section"
+                        aria-label="Measurements"
+                      >
+                        <div className="panel-heading">Measurements</div>
+                        <ul className="measure-list">
+                          {checks.map((check) => {
+                            const value = checkValue(check),
+                              range = checkRange(check);
+                            const Icon =
+                              check.status === "pass"
+                                ? Check
+                                : check.status === "fail"
+                                  ? X
+                                  : HelpCircle;
+                            return (
+                              <li
+                                key={check.id}
+                                className={`measure ${check.status}`}
+                                data-check={check.id}
+                              >
+                                <Icon size={12} aria-hidden="true" />
+                                <div>
+                                  <div className="measure-line">
+                                    <span className="measure-label">
+                                      {CHECK_LABELS[check.id]}
+                                    </span>
+                                    <span className="measure-status">
+                                      {statusWord(check)}
+                                    </span>
+                                  </div>
+                                  {(value || range) && (
+                                    <div className="measure-values">
+                                      {value}
+                                      {value && range ? " · " : ""}
+                                      {range && `allowed ${range}`}
+                                    </div>
+                                  )}
+                                  {(check.status !== "pass" ||
+                                    check.id === "resolution") && (
+                                    <div className="measure-message">
+                                      {check.message}
+                                    </div>
+                                  )}
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                        <p className="fine-print">
+                          Measured from the head positions you set or face
+                          assist found. Check them against your photo.
+                        </p>
+                      </section>
+                    </>
+                  )}
                   <div className="control-divider" />
                   <section className="check-section">
                     <div className="panel-heading">One last look</div>
@@ -1604,7 +2088,9 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                       </li>
                       <li>
                         <Check size={12} />
-                        <span>Review the official document requirements.</span>
+                        <span>
+                          Check the issuing authority’s current photo rules.
+                        </span>
                       </li>
                       {!isOriginal && (
                         <li>
@@ -1616,8 +2102,8 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                       )}
                     </ul>
                     <p className="fine-print">
-                      These are reminders for you to check, not automatic
-                      approval. Acceptance is decided by the issuing authority.
+                      These are reminders for you to check. The issuing authority
+                      decides acceptance.
                     </p>
                   </section>
                 </aside>
@@ -1630,7 +2116,9 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
                 <span>
                   <button
                     className="text-button"
-                    disabled={!history.length || !!busy || isOriginal}
+                    disabled={
+                      (!history.length && !gestureOpen) || !!busy || isOriginal
+                    }
                     onClick={undo}
                   >
                     <RotateCcw size={11} /> Undo position
@@ -1652,14 +2140,15 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
               <h2>{keyword.title}</h2>
               <p>{keyword.description}</p>
               <a
-                className="official-link"
+                className="source-link"
                 target="_blank"
                 rel="noreferrer"
                 href={
                   PRESETS.find((item) => item.id === keyword.preset)!.sourceUrl
                 }
               >
-                Read the official requirements <ExternalLink size={11} />
+                {sourceLabel(PRESETS.find((item) => item.id === keyword.preset)!)}{" "}
+                <ExternalLink size={11} />
               </a>
             </section>
           )}
@@ -1670,12 +2159,15 @@ export default function App({ initialPath }: { initialPath?: string } = {}) {
           <LockKeyhole size={12} /> A little studio. Entirely yours.
         </span>
         <nav className="footer-links" aria-label="Footer navigation">
-          <a href="/about/">About & privacy</a>
+          <a href="/about/">About</a>
+          <a href="/privacy/">Privacy</a>
+          <a href="/terms/">Terms</a>
+          <a href="/accessibility/">Accessibility</a>
           <a href={SUPPORT_URL}>Support</a>
           <a href="/llms.txt">For agents</a>
           <a href="/us-passport-photo/">Photo formats</a>
         </nav>
-        <span>PortraitPass · made for the next chapter.</span>
+        <p className="footer-legal">{DISCLAIMER}</p>
       </footer>
       {busy && (
         <div className="busy-indicator" role="status">
@@ -1694,7 +2186,7 @@ function SupportPage() {
         <ArrowLeft size={13} /> Back to the studio
       </a>
       <div className="eyebrow" style={{ marginTop: 35 }}>
-        A small thank-you goes a long way
+        Tips are optional
       </div>
       <h1>
         Keep a good
@@ -1713,13 +2205,13 @@ function SupportPage() {
           target="_blank"
           rel="noreferrer"
         >
-          <Heart size={16} /> Leave a one-time thank-you{" "}
+          <Heart size={16} /> Leave a one-time tip{" "}
           <ArrowRight size={15} />
         </a>
       </div>
-      <p>Choose your own amount. Support is always optional.</p>
+      <p>Choose your own amount. Tips are always optional.</p>
       <div className="content-rule" />
-      <h2>A little ongoing support</h2>
+      <h2>Monthly tips</h2>
       <div className="support-tiers">
         {DONATION_LINKS.monthly.map((tier) => (
           <a
@@ -1741,9 +2233,10 @@ function SupportPage() {
         ))}
       </div>
       <p>
-        These contributions support the maker’s open-source work. They don’t
-        unlock features or buy photo approval. Stripe handles payments; your
-        photos never go there.
+        Tips support the maker’s open-source work. They don’t unlock features
+        and have no effect on any photo. Stripe handles payments under its own
+        privacy policy; your photos never go there. See the{" "}
+        <a href="/privacy/">privacy page</a>.
       </p>
     </main>
   );
@@ -1755,7 +2248,7 @@ function AboutPage() {
         <ArrowLeft size={13} /> Back to the studio
       </a>
       <div className="eyebrow" style={{ marginTop: 35 }}>
-        A tool that respects your likeness
+        About PortraitPass
       </div>
       <h1>
         A little studio.
@@ -1769,29 +2262,27 @@ function AboutPage() {
       </p>
       <h2>Your photo stays with you.</h2>
       <p>
-        Your source photo lives in this browser’s memory. No account, upload,
-        analytics, remote image processing or advertising. Closing the page
-        clears the working photo. We only save a project when you ask us to;
-        that project includes your photo, so keep it private.
-      </p>
-      <p>
-        The app’s assets load from its own site. Optional face assistance and
-        general-ID background segmentation load local model files only when
-        requested. Inference stays on your device. Support links open Stripe
-        only when you choose them.
+        Your source photo lives in this browser’s memory. It is never uploaded,
+        and closing the page clears it. The{" "}
+        <a href="/privacy/">privacy page</a> has the details: what the host
+        logs, why there are no cookies or analytics, how face detection stays on
+        your device, and what a saved project file contains.
       </p>
       <h2>Careful preparation. Honest limits.</h2>
       <p>
         Photo dimensions and head measurements can be calculated. Whether a
         photograph meets an authority’s full requirements still needs a person’s
-        review. Check the official source linked beside each document.
-        PortraitPass does not certify biometric compliance or guarantee
-        acceptance.
+        review. Check the rules linked beside each document; they change.
+        PortraitPass checks sizes and positions, and the issuing authority
+        decides acceptance. It gives no guarantee. Some documents, such as
+        Canadian and German passports, cannot be made at home and are listed as
+        such.
       </p>
       <p>
-        Passport print modes preserve your appearance. Digital-original modes
-        preserve the exact original bytes. Background replacement is available
-        only for general ID uses; it is never applied to passport exports.
+        Print modes preserve your appearance unless you turn on background
+        replacement yourself. For documents whose rules forbid edited photos,
+        that option is off by default and carries a warning. Digital-original
+        modes preserve the exact original bytes and never edit anything.
       </p>
       <h2>Open to people and their agents.</h2>
       <p>
@@ -1802,12 +2293,14 @@ function AboutPage() {
       </p>
       <p>
         <a href="/llms.txt">Read the agent guide</a> or{" "}
-        <a href={SUPPORT_URL}>support the studio</a>.
+        <a href={SUPPORT_URL}>leave a tip</a>. See also the{" "}
+        <a href="/terms/">terms</a> and{" "}
+        <a href="/accessibility/">accessibility statement</a>.
       </p>
       <div className="keyword-links">
         {Object.entries(keywordPages).map(([url, page]) => (
           <a href={url} key={url}>
-            {page.title}
+            {page.h1[0]} {page.h1[1]}
           </a>
         ))}
       </div>

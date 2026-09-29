@@ -1,4 +1,6 @@
 export type Mode = "print" | "original" | "general";
+/** What the issuing authority says about editing the background. */
+export type BackgroundEditPolicy = "forbidden" | "unspecified" | "allowed";
 export interface Preset {
   id: string;
   name: string;
@@ -7,6 +9,13 @@ export interface Preset {
   heightMm: number;
   headMinMm?: number;
   headMaxMm?: number;
+  /** Eye line measured up from the bottom edge of the photo, in mm. */
+  eyeMinMm?: number;
+  eyeMaxMm?: number;
+  /** Background editing rule from the published source. Original mode never edits. */
+  backgroundEdit: BackgroundEditPolicy;
+  /** Short capture/print notes shown beside the preset (plain facts, no guarantees). */
+  notes?: string[];
   sourceUrl: string;
   checkedAt: string;
   mode: Mode;
@@ -16,6 +25,15 @@ export interface Preset {
   minWidth?: number;
   minHeight?: number;
   mimeTypes?: string[];
+}
+/** A document people search for that cannot be made at home. Shown, never offered as a preset. */
+export interface DocumentNotice {
+  id: string;
+  name: string;
+  country: string;
+  reason: string;
+  sourceUrl: string;
+  checkedAt: string;
 }
 export interface Paper {
   id: string;
@@ -37,7 +55,7 @@ export interface Landmarks {
 }
 export interface SourceImage {
   name: string;
-  mime: "image/jpeg" | "image/png" | "image/webp";
+  mime: "image/jpeg" | "image/png" | "image/webp" | "image/heic" | "image/heif";
   width: number;
   height: number;
   dataUrl?: string;

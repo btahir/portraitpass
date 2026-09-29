@@ -11,12 +11,19 @@ import {
   type Project,
 } from "../core/index.js";
 import {
+  EXIT_CODES,
+  errorPayload,
+  exitCodeFor,
+  assertHeifAllowed,
   inspectFile,
+  parseJsonObject,
   prepareProject,
   renderFile,
   saveFile,
 } from "./operations.js";
-export const EXIT_CODES = { INVALID: 2, INPUT: 3, OUTPUT: 4, INTERNAL: 1 };
+export { EXIT_CODES };
+const LANDMARK_KEYS = ["centerX", "crownY", "chinY", "eyesY"] as const;
+const CROP_KEYS = ["x", "y", "width", "height"] as const;
 async function main() {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
@@ -45,13 +52,14 @@ async function main() {
         "presets",
         "inspect --input photo.jpg [--preset us-online]",
         'crop --input photo.jpg --preset us-passport [--landmarks \'{"centerX":600,"crownY":200,"chinY":1000,"eyesY":500}\']',
-        "render --input photo.jpg --preset us-passport --output photo.jpg [--format jpeg|png|pdf|original] [--crop JSON]",
+        "render --input photo.jpg --preset us-passport --output photo.jpg [--format jpeg|png|pdf|original] [--crop JSON]  (format is inferred from the output extension; a mismatch fails)",
+        "render --project photo.portraitpass.json --output photo.jpg  (do not combine --preset with --project unless it matches the project)",
         "sheet --input photo.jpg --preset uk-passport --paper 4x6 --format pdf --output sheet.pdf",
         "project --input photo.jpg --preset us-passport --embed --output photo.portraitpass.json",
         "layout --preset us-passport --paper 4x6",
       ],
       options:
-        "All commands accept --json. Outputs are never overwritten unless --overwrite is explicit. Source files are never overwritten.",
+        "All commands accept --json. Outputs are never overwritten unless --overwrite is explicit. Source and project files are never overwritten.",
       exitCodes: EXIT_CODES,
     };
   else if (command === "presets") result = { presets: PRESETS, papers: PAPERS };
@@ -64,13 +72,14 @@ async function main() {
       throw new PortraitError("SOURCE_REQUIRED", "--input is required.");
     const source = await inspectFile(values.input),
       preset = getPreset(values.preset ?? "us-passport");
+    assertHeifAllowed(source.mime, preset.id);
     result = {
-      crop: values.landmarks
+      crop: values.landmarks !== undefined
         ? cropFromLandmarks(
             source.width,
             source.height,
             preset,
-            JSON.parse(values.landmarks),
+            parseJsonObject(values.landmarks, "--landmarks", LANDMARK_KEYS),
           )
         : defaultCrop(source.width, source.height, preset),
       presetId: preset.id,
@@ -115,9 +124,12 @@ async function main() {
       paperId: values.paper,
       format: values.format as Project["format"],
       dpi: values.dpi ? Number(values.dpi) : undefined,
-      crop: values.crop ? JSON.parse(values.crop) : undefined,
+      crop:
+        values.crop === undefined
+          ? undefined
+          : parseJsonObject(values.crop, "--crop", CROP_KEYS),
       overwrite: values.overwrite,
-      sheet: command === "sheet",
+      sheet: command === "sheet" ? true : undefined,
     });
   } else
     throw new PortraitError(
@@ -129,21 +141,7 @@ async function main() {
   );
 }
 main().catch((error: unknown) => {
-  const e =
-    error instanceof PortraitError
-      ? error
-      : new PortraitError(
-          error instanceof SyntaxError ? "INVALID_JSON" : "INVALID_INPUT",
-          error instanceof Error ? error.message : "Operation failed.",
-        );
-  console.log(
-    JSON.stringify({ ok: false, error: { code: e.code, message: e.message } }),
-  );
-  process.exitCode = /OUTPUT|OVERWRITE/.test(e.code)
-    ? EXIT_CODES.OUTPUT
-    : /INPUT_NOT_FOUND|SOURCE_REQUIRED|INVALID_IMAGE|UNSUPPORTED_IMAGE/.test(
-          e.code,
-        )
-      ? EXIT_CODES.INPUT
-      : EXIT_CODES.INVALID;
+  const e = errorPayload(error);
+  console.log(JSON.stringify({ ok: false, error: e }));
+  process.exitCode = exitCodeFor(e.code);
 });

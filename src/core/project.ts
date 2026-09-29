@@ -1,5 +1,10 @@
 import { getPreset, getPaper } from "./presets.js";
-import { cropIssues, defaultCrop } from "./geometry.js";
+import {
+  cropIssues,
+  defaultCrop,
+  landmarksValid,
+  LANDMARK_ORDER_MESSAGE,
+} from "./geometry.js";
 import {
   PortraitError,
   type Issue,
@@ -12,14 +17,27 @@ export const MAX_PROJECT_BYTES = 60 * 1024 * 1024;
 export const MAX_SOURCE_PIXELS = 40_000_000;
 export function projectPreset(project: Project): Preset {
   const preset = getPreset(project.presetId);
-  return preset.mode === "general" && project.customSize
-    ? {
-        ...preset,
-        widthMm: project.customSize.widthMm,
-        heightMm: project.customSize.heightMm,
-      }
+  // Only the two dimensions are ever read from customSize; no other field can reach the preset.
+  const size = project.customSize;
+  return preset.mode === "general" && size
+    ? { ...preset, widthMm: size.widthMm, heightMm: size.heightMm }
     : preset;
 }
+/** Plain warning when the issuing authority does not accept digitally altered photos. */
+export function backgroundWarning(preset: Preset): string | null {
+  return preset.backgroundEdit === "forbidden"
+    ? "The issuing authority for this document does not accept digitally altered photos. Retake against a plain light wall instead; a replaced background may be refused."
+    : null;
+}
+const MIME_LABELS: Record<string, string> = {
+  "image/jpeg": "JPEG",
+  "image/png": "PNG",
+  "image/webp": "WebP",
+  "image/heic": "HEIC",
+  "image/heif": "HEIF",
+};
+const SOURCE_MIMES = Object.keys(MIME_LABELS);
+const PASSTHROUGH_MIMES = ["image/heic", "image/heif"];
 export function createProject(
   source: SourceImage,
   presetId = "us-passport",
@@ -81,19 +99,28 @@ export function validateProject(value: unknown): {
     if (
       typeof s.name !== "string" ||
       s.name.length > 255 ||
-      !["image/jpeg", "image/png", "image/webp"].includes(s.mime) ||
+      !SOURCE_MIMES.includes(s.mime) ||
       ![s.width, s.height].every((n) => Number.isSafeInteger(n) && n > 0) ||
       s.width * s.height > MAX_SOURCE_PIXELS
     )
       fail(
         "INVALID_SOURCE",
-        "Source must be a JPEG, PNG or WebP of at most 40 megapixels.",
+        "Source must be a JPEG, PNG or WebP of at most 40 megapixels (HEIC or HEIF for digital originals).",
+      );
+    else if (
+      PASSTHROUGH_MIMES.includes(s.mime) &&
+      preset &&
+      preset.mode !== "original"
+    )
+      fail(
+        "INVALID_SOURCE",
+        "HEIC and HEIF photos can only be used for digital original documents. Convert to JPEG or PNG for print preparation.",
       );
     if (
       s.dataUrl !== undefined &&
       (typeof s.dataUrl !== "string" ||
         s.dataUrl.length > Math.ceil((MAX_SOURCE_BYTES * 4) / 3) + 100 ||
-        !/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]*={0,2}$/.test(
+        !/^data:image\/(jpeg|png|webp|heic|heif);base64,[A-Za-z0-9+/]*={0,2}$/.test(
           s.dataUrl,
         ) ||
         !s.dataUrl.startsWith(`data:${s.mime};base64,`))
@@ -113,8 +140,10 @@ export function validateProject(value: unknown): {
     p.background.tolerance > 100
   )
     fail("INVALID_BACKGROUND", "Background settings are invalid.");
+  // A mask is only kept while background replacement is on; otherwise it is dropped below.
   if (
-    p.background?.maskDataUrl !== undefined &&
+    p.background?.enabled === true &&
+    p.background.maskDataUrl !== undefined &&
     (typeof p.background.maskDataUrl !== "string" ||
       p.background.maskDataUrl.length > 20_000_000 ||
       !/^data:image\/png;base64,[A-Za-z0-9+/]*={0,2}$/.test(
@@ -125,31 +154,33 @@ export function validateProject(value: unknown): {
       "INVALID_MASK",
       "Background mask must be a PNG data URL, at most 15 MB.",
     );
-  if (preset && p.background?.enabled && preset.mode !== "general")
+  if (preset && p.background?.enabled === true && preset.mode === "original")
     fail(
       "BACKGROUND_FORBIDDEN",
-      "Background changes are restricted to General ID.",
+      "Digital original documents are exported unchanged; the background cannot be replaced.",
     );
   if (p.customSize !== undefined) {
+    const c = p.customSize as unknown;
+    const keys =
+      c && typeof c === "object" && !Array.isArray(c) ? Object.keys(c) : [];
+    const size = c as { widthMm: number; heightMm: number };
     if (
       preset?.mode !== "general" ||
-      !p.customSize ||
-      ![p.customSize.widthMm, p.customSize.heightMm].every(
-        (n) => Number.isFinite(n) && n >= 10,
+      keys.length !== 2 ||
+      !keys.includes("widthMm") ||
+      !keys.includes("heightMm") ||
+      ![size.widthMm, size.heightMm].every(
+        (n) => typeof n === "number" && Number.isFinite(n) && n >= 10,
       ) ||
-      p.customSize.widthMm > 100 ||
-      p.customSize.heightMm > 150
+      size.widthMm > 100 ||
+      size.heightMm > 150
     )
       fail(
         "INVALID_CUSTOM_SIZE",
-        "Custom dimensions are available only for General ID: 10–100 mm wide and 10–150 mm high.",
+        "Custom dimensions are available only for General ID: exactly widthMm and heightMm, 10–100 mm wide and 10–150 mm high.",
       );
     else if (preset)
-      preset = {
-        ...preset,
-        widthMm: p.customSize.widthMm,
-        heightMm: p.customSize.heightMm,
-      };
+      preset = { ...preset, widthMm: size.widthMm, heightMm: size.heightMm };
   }
   if (preset?.mode === "original" && p.outputKind === "sheet")
     fail("ORIGINAL_ONLY", "Digital originals cannot be print sheets.");
@@ -198,27 +229,66 @@ export function validateProject(value: unknown): {
     const l = p.landmarks;
     if (
       !l ||
-      !Object.values(l).every(Number.isFinite) ||
-      ![l.centerX, l.crownY, l.chinY, l.eyesY].every(Number.isFinite) ||
-      l.centerX < 0 ||
-      l.centerX > p.source?.width ||
-      l.crownY < 0 ||
-      l.chinY > p.source?.height ||
-      l.crownY >= l.eyesY ||
-      l.eyesY >= l.chinY
+      typeof l !== "object" ||
+      !p.source ||
+      !landmarksValid(l, p.source.width, p.source.height)
     )
       fail(
         "INVALID_LANDMARKS",
-        "Landmarks must be inside the source, with crown, eyes, chin in order.",
+        `Landmarks must be inside the source. ${LANDMARK_ORDER_MESSAGE}`,
       );
   }
-  return {
-    valid: issues.length === 0,
-    issues,
-    ...(issues.length === 0
-      ? { project: JSON.parse(JSON.stringify(p)) as Project }
+  if (issues.length > 0) return { valid: false, issues };
+  // Rebuild from known fields only, so nothing unexpected survives in the project.
+  const clean: Project = {
+    version: 1,
+    ...(p.outputKind !== undefined ? { outputKind: p.outputKind } : {}),
+    presetId: p.presetId,
+    source: {
+      name: p.source.name,
+      mime: p.source.mime,
+      width: p.source.width,
+      height: p.source.height,
+      ...(p.source.dataUrl !== undefined ? { dataUrl: p.source.dataUrl } : {}),
+    },
+    crop: {
+      x: p.crop.x,
+      y: p.crop.y,
+      width: p.crop.width,
+      height: p.crop.height,
+    },
+    ...(p.landmarks !== undefined
+      ? {
+          landmarks: {
+            centerX: p.landmarks.centerX,
+            crownY: p.landmarks.crownY,
+            chinY: p.landmarks.chinY,
+            eyesY: p.landmarks.eyesY,
+          },
+        }
+      : {}),
+    dpi: p.dpi,
+    paperId: p.paperId,
+    format: p.format,
+    background: {
+      color: p.background.color,
+      enabled: p.background.enabled,
+      tolerance: p.background.tolerance,
+      // Segmentation masks are kept only while background replacement is on.
+      ...(p.background.enabled && p.background.maskDataUrl !== undefined
+        ? { maskDataUrl: p.background.maskDataUrl }
+        : {}),
+    },
+    ...(p.customSize !== undefined
+      ? {
+          customSize: {
+            widthMm: p.customSize.widthMm,
+            heightMm: p.customSize.heightMm,
+          },
+        }
       : {}),
   };
+  return { valid: true, issues, project: clean };
 }
 export function parseProject(text: string): Project {
   if (text.length > MAX_PROJECT_BYTES)
@@ -237,6 +307,9 @@ export function parseProject(text: string): Project {
     );
   return result.project;
 }
+function formatBytes(n: number) {
+  return n >= 1_000_000 ? `${n / 1_000_000} MB` : `${n / 1000} KB`;
+}
 export function originalIssues(
   source: { width: number; height: number; mime: string; bytes: number },
   preset: Preset,
@@ -245,13 +318,12 @@ export function originalIssues(
   if (preset.minBytes && source.bytes < preset.minBytes)
     issues.push({
       code: "FILE_TOO_SMALL",
-      message: `The official minimum is ${preset.minBytes / 1000} KB. Keep the original capture.`,
+      message: `This destination asks for at least ${formatBytes(preset.minBytes)}. Keep the original capture.`,
     });
   if (preset.maxBytes && source.bytes > preset.maxBytes)
     issues.push({
       code: "FILE_TOO_LARGE",
-      message:
-        "The official upload limit is 10 MB. Choose a different original capture.",
+      message: `This destination accepts files up to ${formatBytes(preset.maxBytes)}. Choose a different original capture.`,
     });
   if (
     (preset.minWidth && source.width < preset.minWidth) ||
@@ -259,12 +331,18 @@ export function originalIssues(
   )
     issues.push({
       code: "LOW_RESOLUTION",
-      message: `The official minimum is ${preset.minWidth} × ${preset.minHeight} pixels.`,
+      message: `This destination asks for at least ${preset.minWidth ?? "any"} × ${preset.minHeight ?? "any"} pixels.`,
     });
-  if (preset.mimeTypes && !preset.mimeTypes.includes(source.mime))
+  if (preset.mimeTypes && !preset.mimeTypes.includes(source.mime)) {
+    const labels = preset.mimeTypes.map((m) => MIME_LABELS[m] ?? m);
+    const list =
+      labels.length > 1
+        ? `${labels.slice(0, -1).join(", ")} or ${labels[labels.length - 1]}`
+        : (labels[0] ?? "");
     issues.push({
       code: "UNSUPPORTED_ORIGINAL",
-      message: "This destination needs the original JPEG or PNG capture.",
+      message: `This destination accepts ${list} files; this photo is ${MIME_LABELS[source.mime] ?? source.mime}.`,
     });
+  }
   return issues;
 }

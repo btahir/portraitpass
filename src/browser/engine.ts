@@ -7,8 +7,13 @@ export function warmExportTools() {
   }));
 }
 import {
+  BACKGROUND_NOTE,
+  INDEPENDENCE_NOTE,
+  PortraitError,
   cropFromLandmarks,
   cropIssues,
+  getPreset,
+  guideBands,
   outputSize,
   layoutSheet,
   parseProject,
@@ -18,37 +23,108 @@ import type { Crop, Preset, Project, Landmarks } from "../core/index";
 
 export interface LoadedPhoto {
   file: File;
+  /** Object URL for previews. Empty string when `bytesOnly` (nothing the browser can show). */
   url: string;
   image: HTMLImageElement;
+  /** Pixel size of the source. 0 × 0 when `bytesOnly` and the HEIC header does not state it. */
   width: number;
   height: number;
   name: string;
   isDemo: boolean;
+  /** Type found in the file contents. `file.type` is corrected to match (HEIC often arrives as ""). */
+  mime: string;
+  /**
+   * True when this browser cannot decode the file (HEIC/HEIF outside Safari). The bytes are kept so a
+   * digital-original export still passes them through unchanged. Previews show a neutral placeholder;
+   * every print, background, face-assist and project-save operation throws HEIC_UNSUPPORTED.
+   */
+  bytesOnly: boolean;
 }
 export interface RenderOptions {
   paperId?: string;
   sheet?: boolean;
+  /** Draw spec guides: eye band, centre line and head-height guidance (single-photo preview only). */
   guides?: boolean;
   background?: string;
   dpi?: number;
+  /** With `guides`, adds crown/eyes/chin lines and a crown band placed from the chin line. */
   landmarks?: Landmarks;
 }
+export type ExportOptions = RenderOptions & { format: "png" | "jpeg" | "pdf" };
+/**
+ * Safari (iOS especially) refuses canvases above about 16.7 million pixels. Every canvas this file
+ * creates stays under this budget. Raster sheets that would need a bigger canvas are refused with a
+ * clear error, and the PDF path never builds one (each photo is placed as its own image).
+ */
+export const MAX_CANVAS_AREA = 16_000_000;
+/** Segmentation and face detection run on a copy at most this big; their models look at ~256 px anyway. */
+const ANALYSIS_MAX_AREA = 4_000_000;
+export const HEIC_PRINT_MESSAGE =
+  "HEIC photos can be used as-is for US online renewal. For prints, use a JPEG: on iPhone, choose ‘Most Compatible’ in Settings › Camera › Formats, or share the photo as JPEG.";
+export const HEIC_UNSUPPORTED_MESSAGE =
+  "This browser can't read HEIC photos. In Safari it works, or export as JPEG from your Photos app.";
+// One copy of the file wording, shared with the Node side (src/core/text.ts).
+export { BACKGROUND_NOTE };
+export const PDF_CREATOR = INDEPENDENCE_NOTE;
 const MAX_BYTES = 20 * 1024 * 1024;
+const SUPPORTED_TYPES =
+  /^image\/(jpeg|png|webp|heic|heif|heic-sequence|heif-sequence)$/;
+/** Segmentation masks, kept at analysis size (or project size). Upscaled only when compositing. */
 const masks = new WeakMap<HTMLImageElement, HTMLCanvasElement>();
-const backgrounds = new WeakMap<
-  HTMLImageElement,
-  { color: string; canvas: HTMLCanvasElement }
->();
 function canvas(width: number, height: number) {
   const c = document.createElement("canvas");
   c.width = width;
   c.height = height;
   return c;
 }
+/** Setting the size to 0 hands the bitmap memory back at once (Safari holds it otherwise). */
+function freeCanvas(c: HTMLCanvasElement) {
+  c.width = 0;
+  c.height = 0;
+}
 function context(c: HTMLCanvasElement) {
   const ctx = c.getContext("2d");
   if (!ctx) throw new Error("Your browser could not open the photo canvas.");
   return ctx;
+}
+function heicError() {
+  return new PortraitError("HEIC_UNSUPPORTED", HEIC_UNSUPPORTED_MESSAGE);
+}
+/** True for a HEIC/HEIF source, whether or not this browser can decode it. */
+export function isHeifPhoto(photo: Pick<LoadedPhoto, "mime">) {
+  return photo.mime === "image/heic" || photo.mime === "image/heif";
+}
+/** One rule: HEIC/HEIF is only for original mode. Anything that edits, prints or saves throws here. */
+function assertEditable(photo: LoadedPhoto) {
+  if (photo.bytesOnly) throw heicError();
+  if (isHeifPhoto(photo))
+    throw new PortraitError("HEIC_UNSUPPORTED", HEIC_PRINT_MESSAGE);
+}
+/** Largest size with the same aspect whose area fits `maxArea`. Never enlarges. */
+function fitSize(width: number, height: number, maxArea: number) {
+  const scale = Math.min(1, Math.sqrt(maxArea / (width * height)));
+  return {
+    scale,
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+}
+/** The photo itself when it is small enough, else a downscaled copy to analyse. Call release() after. */
+function analysisSource(photo: LoadedPhoto) {
+  const fit = fitSize(photo.width, photo.height, ANALYSIS_MAX_AREA);
+  if (fit.scale === 1)
+    return {
+      source: photo.image as HTMLImageElement | HTMLCanvasElement,
+      scale: 1,
+      release() {},
+    };
+  const c = canvas(fit.width, fit.height);
+  context(c).drawImage(photo.image, 0, 0, fit.width, fit.height);
+  return {
+    source: c as HTMLImageElement | HTMLCanvasElement,
+    scale: fit.width / photo.width,
+    release: () => freeCanvas(c),
+  };
 }
 export async function loadPhoto(
   file: File,
@@ -56,31 +132,46 @@ export async function loadPhoto(
 ): Promise<LoadedPhoto> {
   if (file.size > MAX_BYTES)
     throw new Error("Choose a photo smaller than 20 MB.");
-  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type))
-    throw new Error(
-      "Choose a JPEG, PNG or WebP photo. HEIC is not supported by this browser studio.",
-    );
-  await checkRaster(file);
-  const url = URL.createObjectURL(file),
+  if (file.type && !SUPPORTED_TYPES.test(file.type) && file.type !== "application/octet-stream")
+    throw new Error("Choose a JPEG, PNG, WebP or HEIC photo.");
+  const info = await checkRaster(file);
+  const heif = info.mime === "image/heic" || info.mime === "image/heif";
+  const typed =
+    file.type === info.mime
+      ? file
+      : new File([file], file.name, {
+          type: info.mime,
+          lastModified: file.lastModified,
+        });
+  const url = URL.createObjectURL(typed),
     image = new Image();
   image.src = url;
+  const make = (bytesOnly: boolean): LoadedPhoto => ({
+    file: typed,
+    url: bytesOnly ? "" : url,
+    image,
+    // HEIC/HEIF always use the size the file states (ispe), never the browser's decoded size, which
+    // Safari may rotate. The command line reads the same box, so both agree.
+    width: bytesOnly || (heif && info.width > 0) ? info.width : image.naturalWidth,
+    height: bytesOnly || (heif && info.height > 0) ? info.height : image.naturalHeight,
+    name: file.name,
+    isDemo,
+    mime: info.mime,
+    bytesOnly,
+  });
   try {
     await image.decode();
-    if (image.naturalWidth * image.naturalHeight > 40_000_000)
-      throw new Error("Choose a photo under 40 megapixels.");
-    return {
-      file,
-      url,
-      image,
-      width: image.naturalWidth,
-      height: image.naturalHeight,
-      name: file.name,
-      isDemo,
-    };
   } catch (e) {
     URL.revokeObjectURL(url);
+    // Chrome and Firefox cannot decode HEIC. Keep the bytes so a digital original still exports.
+    if (heif) return make(true);
     throw e instanceof Error ? e : new Error("This photo could not be opened.");
   }
+  if (image.naturalWidth * image.naturalHeight > 40_000_000) {
+    URL.revokeObjectURL(url);
+    throw new Error("Choose a photo under 40 megapixels.");
+  }
+  return make(false);
 }
 export async function loadDemo() {
   const response = await fetch("/demo-portrait.png");
@@ -92,32 +183,248 @@ export async function loadDemo() {
     true,
   );
 }
+/** Revoke the object URL, drop the decoded image and free the cached mask canvas. */
 export function releasePhoto(p: LoadedPhoto) {
-  URL.revokeObjectURL(p.url);
+  if (p.url) URL.revokeObjectURL(p.url);
+  const mask = masks.get(p.image);
+  if (mask) freeCanvas(mask);
+  masks.delete(p.image);
+  p.image.removeAttribute("src");
 }
-function pixels(
-  photo: LoadedPhoto,
-  preset: Preset,
-  background?: string,
-): CanvasImageSource {
-  if (!background || preset.mode !== "general") return photo.image;
-  const cached = backgrounds.get(photo.image);
-  if (cached?.color === background) return cached.canvas;
-  const mask = masks.get(photo.image);
-  if (!mask) return photo.image;
+function backgroundMask(photo: LoadedPhoto, background?: string) {
+  if (!background || photo.bytesOnly) return undefined;
   if (!/^#[0-9a-f]{6}$/i.test(background))
     throw new Error("Use a six-digit background colour.");
-  const c = canvas(photo.width, photo.height),
-    ctx = context(c);
-  ctx.drawImage(photo.image, 0, 0);
+  return masks.get(photo.image);
+}
+/**
+ * The crop, drawn at w × h with the background replaced. Only the crop is composited, so no canvas
+ * ever needs the size of the source photo. The (small) mask is upscaled here by drawImage.
+ */
+function compositeCrop(
+  photo: LoadedPhoto,
+  crop: Crop,
+  mask: HTMLCanvasElement,
+  background: string,
+  w: number,
+  h: number,
+) {
+  const c = canvas(Math.max(1, Math.round(w)), Math.max(1, Math.round(h))),
+    ctx = context(c),
+    kx = mask.width / photo.width,
+    ky = mask.height / photo.height;
+  ctx.drawImage(photo.image, crop.x, crop.y, crop.width, crop.height, 0, 0, c.width, c.height);
   ctx.globalCompositeOperation = "destination-in";
-  ctx.drawImage(mask, 0, 0);
+  ctx.drawImage(
+    mask,
+    crop.x * kx,
+    crop.y * ky,
+    crop.width * kx,
+    crop.height * ky,
+    0,
+    0,
+    c.width,
+    c.height,
+  );
   ctx.globalCompositeOperation = "destination-over";
   ctx.fillStyle = background;
   ctx.fillRect(0, 0, c.width, c.height);
   ctx.globalCompositeOperation = "source-over";
-  backgrounds.set(photo.image, { color: background, canvas: c });
   return c;
+}
+const PERSIMMON = "182,74,45",
+  SAGE = "63,107,69";
+const mmText = (n: number) =>
+  Number.isInteger(n) ? String(n) : n.toFixed(1);
+interface ChipBox {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+/**
+ * A label on a light chip so it reads on light and dark photos. `lu` is the size of one CSS pixel on
+ * the canvas, so labels stay about 12 CSS px tall however far the preview is scaled down. A chip that
+ * would land on one already drawn moves down (or up, at the bottom edge) until it is clear.
+ */
+function chip(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  lu: number,
+  ink: string,
+  placed: ChipBox[],
+  height: number,
+  alignRight = false,
+) {
+  ctx.setLineDash([]);
+  ctx.font = `${12 * lu}px sans-serif`;
+  const w = ctx.measureText(text).width + 8 * lu,
+    h = 18 * lu,
+    left = Math.max(0, alignRight ? x - w : x),
+    hit = (top: number) =>
+      placed.some(
+        (b) =>
+          left < b.right && left + w > b.left && top < b.bottom && top + h > b.top,
+      );
+  let top = Math.min(Math.max(0, y), Math.max(0, height - h));
+  for (let step = 0; step < 12 && hit(top); step++) {
+    const down = top + h + 2 * lu;
+    top = down + h <= height ? down : Math.max(0, top - (h + 2 * lu));
+  }
+  placed.push({ left, top, right: left + w, bottom: top + h });
+  ctx.fillStyle = "rgba(255,253,246,0.9)";
+  ctx.fillRect(left, top, w, h);
+  ctx.fillStyle = ink;
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, left + 4 * lu, top + h / 2);
+}
+function guideLine(
+  ctx: CanvasRenderingContext2D,
+  rgb: string,
+  u: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  alpha = 0.9,
+) {
+  ctx.setLineDash([5 * u, 4 * u]);
+  for (const [style, width] of [
+    ["rgba(255,255,255,0.4)", 2.5 * u],
+    [`rgba(${rgb},${alpha})`, u],
+  ] as const) {
+    ctx.strokeStyle = style;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+  }
+}
+/**
+ * Spec guides on the output-size photo: eye band (mm up from the bottom), centre line, and head
+ * height. With landmarks the head band is the allowed crown zone above the current chin line; without
+ * them a bracket at the right edge shows the minimum and maximum head height to scale.
+ */
+function drawGuides(
+  ctx: CanvasRenderingContext2D,
+  size: { width: number; height: number },
+  u: number,
+  preset: Preset,
+  crop: Crop,
+  landmarks?: Landmarks,
+  /** Canvas pixels per CSS pixel of the displayed preview (>= 1 when it is shown smaller than drawn). */
+  cssScale = 1,
+) {
+  const lu = u * Math.max(1, cssScale),
+    placed: ChipBox[] = [],
+    { width: W, height: H } = size,
+    perMm = H / preset.heightMm,
+    bands = guideBands(preset);
+  ctx.save();
+  guideLine(ctx, SAGE, u, W / 2, 0, W / 2, H, 0.7);
+  if (bands.eyesFromBottom) {
+    const { minMm, maxMm } = bands.eyesFromBottom,
+      top = H - maxMm * perMm,
+      bottom = H - minMm * perMm;
+    ctx.fillStyle = `rgba(${SAGE},0.16)`;
+    ctx.fillRect(0, top, W, bottom - top);
+    guideLine(ctx, SAGE, u, 0, top, W, top);
+    guideLine(ctx, SAGE, u, 0, bottom, W, bottom);
+    chip(
+      ctx,
+      `Eyes ${mmText(minMm)}–${mmText(maxMm)} mm from bottom`,
+      6 * u,
+      top - 20 * lu < 0 ? bottom + 2 * u : top - 20 * lu,
+      lu,
+      "#2f5234",
+      placed,
+      H,
+    );
+  }
+  if (bands.head && landmarks) {
+    const chin = ((landmarks.chinY - crop.y) / crop.height) * H,
+      upper = chin - bands.head.maxMm * perMm,
+      lower = chin - bands.head.minMm * perMm;
+    ctx.fillStyle = `rgba(${PERSIMMON},0.16)`;
+    ctx.fillRect(0, upper, W, lower - upper);
+    guideLine(ctx, PERSIMMON, u, 0, upper, W, upper);
+    guideLine(ctx, PERSIMMON, u, 0, lower, W, lower);
+    chip(
+      ctx,
+      `Crown zone · head ${mmText(bands.head.minMm)}–${mmText(bands.head.maxMm)} mm`,
+      6 * u,
+      lower + 2 * u,
+      lu,
+      "#8e3820",
+      placed,
+      H,
+    );
+  } else if (bands.head) {
+    const minPx = bands.head.minMm * perMm,
+      maxPx = bands.head.maxMm * perMm,
+      x = W - 14 * u,
+      base = Math.min(H - 4 * u, Math.max(H * 0.9, maxPx + 8 * u));
+    ctx.setLineDash([]);
+    ctx.fillStyle = `rgba(${PERSIMMON},0.35)`;
+    ctx.fillRect(x - 3 * u, base - maxPx, 6 * u, maxPx - minPx);
+    ctx.strokeStyle = `rgba(${PERSIMMON},0.9)`;
+    ctx.lineWidth = u;
+    ctx.beginPath();
+    ctx.moveTo(x, base);
+    ctx.lineTo(x, base - maxPx);
+    for (const y of [base, base - minPx, base - maxPx]) {
+      ctx.moveTo(x - 6 * u, y);
+      ctx.lineTo(x + 6 * u, y);
+    }
+    ctx.stroke();
+    chip(
+      ctx,
+      `Head ${mmText(bands.head.minMm)}–${mmText(bands.head.maxMm)} mm`,
+      x - 10 * u,
+      base - maxPx - 10 * lu,
+      lu,
+      "#8e3820",
+      placed,
+      H,
+      true,
+    );
+  }
+  if (landmarks) {
+    for (const [label, y] of [
+      ["Crown", landmarks.crownY],
+      ["Eyes", landmarks.eyesY],
+      ["Chin", landmarks.chinY],
+    ] as const) {
+      const py = ((y - crop.y) / crop.height) * H;
+      if (py < 0 || py > H) continue;
+      guideLine(ctx, PERSIMMON, u, 0, py, W, py, 0.75);
+      chip(ctx, label, W - 4 * u, py - 19 * lu, lu, "#8e3820", placed, H, true);
+    }
+  }
+  ctx.restore();
+}
+function drawPlaceholder(
+  ctx: CanvasRenderingContext2D,
+  size: { width: number; height: number },
+  original: boolean,
+) {
+  ctx.fillStyle = "#e9e7df";
+  ctx.fillRect(0, 0, size.width, size.height);
+  ctx.fillStyle = "#4b514e";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const fs = Math.max(14, size.width / 28);
+  ctx.font = `${fs}px sans-serif`;
+  const lines = original
+    ? ["No preview in this browser.", "Your original file downloads unchanged."]
+    : ["This browser can't read HEIC photos.", "Try Safari, or export a JPEG."];
+  lines.forEach((line, i) =>
+    ctx.fillText(line, size.width / 2, size.height / 2 + (i - 0.5) * fs * 1.5),
+  );
+  ctx.textAlign = "start";
 }
 export function renderPreview(
   target: HTMLCanvasElement,
@@ -127,9 +434,15 @@ export function renderPreview(
   options: RenderOptions = {},
 ) {
   const sheet = options.sheet && preset.mode !== "original";
+  const known = photo.width > 0 && photo.height > 0;
   const size =
     preset.mode === "original"
-      ? { width: photo.width, height: photo.height }
+      ? known
+        ? { width: photo.width, height: photo.height }
+        : {
+            width: 800,
+            height: Math.round((800 * preset.heightMm) / preset.widthMm),
+          }
       : sheet
         ? layoutSheet(preset, options.paperId ?? "4x6", options.dpi ?? 300)
         : outputSize(preset, options.dpi ?? 300);
@@ -140,29 +453,49 @@ export function renderPreview(
   ctx.scale(ratio, ratio);
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, size.width, size.height);
-  const source = pixels(photo, preset, options.background);
+  if (photo.bytesOnly) {
+    drawPlaceholder(ctx, size, preset.mode === "original");
+    return;
+  }
+  // Digital originals are never edited: no crop, no background, no guides.
   if (preset.mode === "original") {
     ctx.drawImage(photo.image, 0, 0, size.width, size.height);
     return;
   }
+  const mask = backgroundMask(photo, options.background);
   if (sheet) {
     const layout = layoutSheet(
       preset,
       options.paperId ?? "4x6",
       options.dpi ?? 300,
     );
+    const first = layout.placements[0],
+      composite =
+        mask && options.background
+          ? compositeCrop(
+              photo,
+              crop,
+              mask,
+              options.background,
+              first.width * ratio,
+              first.height * ratio,
+            )
+          : undefined;
     for (const p of layout.placements)
-      ctx.drawImage(
-        source,
-        crop.x,
-        crop.y,
-        crop.width,
-        crop.height,
-        p.x,
-        p.y,
-        p.width,
-        p.height,
-      );
+      if (composite) ctx.drawImage(composite, p.x, p.y, p.width, p.height);
+      else
+        ctx.drawImage(
+          photo.image,
+          crop.x,
+          crop.y,
+          crop.width,
+          crop.height,
+          p.x,
+          p.y,
+          p.width,
+          p.height,
+        );
+    if (composite) freeCanvas(composite);
     ctx.strokeStyle = "#89918d";
     ctx.lineWidth = 1;
     for (const m of layout.cutMarks) {
@@ -172,59 +505,42 @@ export function renderPreview(
       ctx.stroke();
     }
   } else {
-    ctx.drawImage(
-      source,
-      crop.x,
-      crop.y,
-      crop.width,
-      crop.height,
-      0,
-      0,
-      size.width,
-      size.height,
-    );
-    if (options.guides) {
-      ctx.strokeStyle = "#496f62";
-      ctx.lineWidth = 1.5 / ratio;
-      ctx.setLineDash([7 / ratio, 5 / ratio]);
-      ctx.beginPath();
-      ctx.ellipse(
-        size.width / 2,
-        size.height * 0.43,
-        size.width * 0.27,
-        size.height * 0.32,
-        0,
-        0,
-        Math.PI * 2,
+    if (mask && options.background) {
+      const composite = compositeCrop(
+        photo,
+        crop,
+        mask,
+        options.background,
+        size.width * ratio,
+        size.height * ratio,
       );
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(0, size.height * 0.4);
-      ctx.lineTo(size.width, size.height * 0.4);
-      ctx.stroke();
-      if (options.landmarks) {
-        const l = options.landmarks;
-        ctx.setLineDash([4 / ratio, 3 / ratio]);
-        ctx.font = `${11 / ratio}px sans-serif`;
-        for (const [label, y] of [
-          ["Crown", l.crownY],
-          ["Eyes", l.eyesY],
-          ["Chin", l.chinY],
-        ] as const) {
-          const py = ((y - crop.y) / crop.height) * size.height;
-          if (py < 0 || py > size.height) continue;
-          ctx.strokeStyle = "#bd4c29";
-          ctx.beginPath();
-          ctx.moveTo(0, py);
-          ctx.lineTo(size.width, py);
-          ctx.stroke();
-          ctx.fillStyle = "#fffdf6";
-          ctx.fillRect(4 / ratio, py - 18 / ratio, 46 / ratio, 16 / ratio);
-          ctx.fillStyle = "#76331e";
-          ctx.fillText(label, 8 / ratio, py - 6 / ratio);
-        }
+      ctx.drawImage(composite, 0, 0, size.width, size.height);
+      freeCanvas(composite);
+    } else
+      ctx.drawImage(
+        photo.image,
+        crop.x,
+        crop.y,
+        crop.width,
+        crop.height,
+        0,
+        0,
+        size.width,
+        size.height,
+      );
+    if (options.guides) {
+        // How much smaller than drawn the preview is shown, so labels stay legible.
+        const shown = target.getBoundingClientRect().width;
+        drawGuides(
+          ctx,
+          size,
+          1 / ratio,
+          preset,
+          crop,
+          options.landmarks,
+          shown > 0 ? target.width / shown : 1,
+        );
       }
-    }
   }
 }
 function toBlob(
@@ -251,26 +567,54 @@ function crc32(bytes: Uint8Array) {
   }
   return (crc ^ 0xffffffff) >>> 0;
 }
-/** Add physical density without retaining EXIF or other source metadata. */
-async function withDensity(blob: Blob, dpi = 300): Promise<Blob> {
+function pngChunk(type: string, data: Uint8Array) {
+  const out = new Uint8Array(12 + data.length),
+    view = new DataView(out.buffer);
+  view.setUint32(0, data.length);
+  for (let i = 0; i < 4; i++) out[4 + i] = type.charCodeAt(i);
+  out.set(data, 8);
+  view.setUint32(8 + data.length, crc32(out.subarray(4, 8 + data.length)));
+  return out;
+}
+const XMP_HEADER = "http://ns.adobe.com/xap/1.0/\0";
+function xmpSegment(note: string) {
+  const xml = `<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?><x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description rdf:about="" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:description><rdf:Alt><rdf:li xml:lang="x-default">${note}</rdf:li></rdf:Alt></dc:description></rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end="w"?>`;
+  const payload = new TextEncoder().encode(XMP_HEADER + xml),
+    out = new Uint8Array(4 + payload.length);
+  out[0] = 0xff;
+  out[1] = 0xe1;
+  out[2] = (payload.length + 2) >> 8;
+  out[3] = (payload.length + 2) & 255;
+  out.set(payload, 4);
+  return out;
+}
+/**
+ * Add physical density without retaining EXIF or other source metadata. When `note` is given the
+ * output also carries it as a description: a PNG tEXt "Description" chunk, or a JPEG XMP APP1 segment.
+ */
+async function withDensity(blob: Blob, dpi = 300, note?: string): Promise<Blob> {
   const bytes = new Uint8Array(await blob.arrayBuffer());
   if (blob.type === "image/png") {
-    const chunk = new Uint8Array(21),
-      view = new DataView(chunk.buffer);
-    view.setUint32(0, 9);
-    chunk.set([112, 72, 89, 115], 4);
-    view.setUint32(8, Math.round(dpi / 0.0254));
-    view.setUint32(12, Math.round(dpi / 0.0254));
-    chunk[16] = 1;
-    view.setUint32(17, crc32(chunk.subarray(4, 17)));
-    return new Blob([bytes.slice(0, 33), chunk, bytes.slice(33)], {
+    const phys = new Uint8Array(9),
+      view = new DataView(phys.buffer);
+    view.setUint32(0, Math.round(dpi / 0.0254));
+    view.setUint32(4, Math.round(dpi / 0.0254));
+    phys[8] = 1;
+    const chunks = [pngChunk("pHYs", phys)];
+    if (note)
+      chunks.push(
+        pngChunk("tEXt", new TextEncoder().encode(`Description\0${note}`)),
+      );
+    return new Blob([bytes.slice(0, 33), ...chunks, bytes.slice(33)], {
       type: blob.type,
     });
   }
   // JPEG canvas encoders generally write a JFIF segment. Update it or insert one.
+  const xmp = note ? [xmpSegment(note)] : [];
   let offset = 2;
   while (offset + 16 < bytes.length && bytes[offset] === 0xff) {
-    const marker = bytes[offset + 1];
+    const marker = bytes[offset + 1],
+      length = (bytes[offset + 2] << 8) | bytes[offset + 3];
     if (
       marker === 0xe0 &&
       String.fromCharCode(...bytes.slice(offset + 4, offset + 9)) === "JFIF\0"
@@ -280,42 +624,49 @@ async function withDensity(blob: Blob, dpi = 300): Promise<Blob> {
       bytes[offset + 13] = dpi & 255;
       bytes[offset + 14] = dpi >> 8;
       bytes[offset + 15] = dpi & 255;
-      return new Blob([bytes], { type: blob.type });
+      const end = offset + 2 + length;
+      return new Blob([bytes.slice(0, end), ...xmp, bytes.slice(end)], {
+        type: blob.type,
+      });
     }
     if (marker === 0xda) break;
-    offset += 2 + ((bytes[offset + 2] << 8) | bytes[offset + 3]);
+    offset += 2 + length;
   }
   const jfif = new Uint8Array([
-    255,
-    224,
-    0,
-    16,
-    74,
-    70,
-    73,
-    70,
-    0,
-    1,
-    2,
-    1,
-    dpi >> 8,
-    dpi & 255,
-    dpi >> 8,
-    dpi & 255,
-    0,
-    0,
+    255, 224, 0, 16, 74, 70, 73, 70, 0, 1, 2, 1,
+    dpi >> 8, dpi & 255, dpi >> 8, dpi & 255, 0, 0,
   ]);
-  return new Blob([bytes.slice(0, 2), jfif, bytes.slice(2)], {
+  return new Blob([bytes.slice(0, 2), jfif, ...xmp, bytes.slice(2)], {
     type: blob.type,
   });
+}
+const ORIGINAL_EXTENSIONS: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/heic": "heic",
+  "image/heif": "heif",
+};
+/** A safe download name for an original: no path or control characters, at most 80 long, extension from the sniffed type. */
+export function originalFilename(photo: Pick<LoadedPhoto, "name" | "mime">) {
+  const leaf = photo.name.split(/[\\/]/).pop() ?? "",
+    stem = leaf
+      .replace(/\.[^.]*$/, "")
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069<>:"|?*%]/g, "")
+      .replace(/^[.\s]+|[.\s]+$/g, "")
+      .slice(0, 80)
+      .replace(/[.\s]+$/, "");
+  return `${stem || "photo"}.${ORIGINAL_EXTENSIONS[photo.mime] ?? "jpg"}`;
 }
 export async function exportPhoto(
   photo: LoadedPhoto,
   preset: Preset,
   crop: Crop,
-  options: RenderOptions & { format: "png" | "jpeg" | "pdf" },
+  options: ExportOptions,
 ) {
   if (preset.mode === "original") {
+    // Digital originals are exact copies. Any background option is ignored: nothing is ever edited.
     if (preset.mimeTypes && !preset.mimeTypes.includes(photo.file.type))
       throw new Error(
         "This application does not accept this file type. Use an original JPEG or PNG.",
@@ -327,41 +678,56 @@ export async function exportPhoto(
       throw new Error(
         "The original file is outside this application’s file-size range. Choose another original photo.",
       );
+    // A HEIC this browser cannot decode may not state its size; the receiving service checks it.
     if (
-      (preset.minWidth && photo.width < preset.minWidth) ||
-      (preset.minHeight && photo.height < preset.minHeight)
+      photo.width > 0 &&
+      photo.height > 0 &&
+      ((preset.minWidth && photo.width < preset.minWidth) ||
+        (preset.minHeight && photo.height < preset.minHeight))
     )
       throw new Error("The original photo is too small for this application.");
-    return { blob: photo.file as Blob, filename: photo.name };
+    return { blob: photo.file as Blob, filename: originalFilename(photo) };
   }
-  const issues = cropIssues(
-    crop,
-    photo.width,
-    photo.height,
-    preset,
-    options.dpi ?? 300,
-  );
+  assertEditable(photo);
+  const dpi = options.dpi ?? 300;
+  const issues = cropIssues(crop, photo.width, photo.height, preset, dpi);
   if (issues.length) throw new Error(issues[0].message);
+  const size = outputSize(preset, dpi),
+    layout = options.sheet
+      ? layoutSheet(preset, options.paperId ?? "4x6", dpi)
+      : null;
+  // Raster sheets are one canvas. Over the budget (600 DPI A4 or Letter, ~34 MP) that fails on iOS
+  // Safari, and hand-assembling a PNG or JPEG from strips is not worth the risk. PDF places each photo
+  // as its own image, so it works at any size.
+  if (layout && options.format !== "pdf" && layout.width * layout.height > MAX_CANVAS_AREA)
+    throw new PortraitError(
+      "SHEET_TOO_LARGE",
+      `This sheet is ${Math.round((layout.width * layout.height) / 1e6)} megapixels, more than phones and tablets can render as one image. Choose PDF, which prints at full quality, or use 300 DPI.`,
+    );
+  let mask: HTMLCanvasElement | undefined;
   if (options.background) {
-    if (preset.mode !== "general")
-      throw new Error(
-        "Background changes are unavailable for passport photos.",
-      );
     await prepareBackground(photo);
+    mask = backgroundMask(photo, options.background);
   }
-  const size = outputSize(preset, options.dpi ?? 300),
-    single = canvas(size.width, size.height);
-  context(single).drawImage(
-    pixels(photo, preset, options.background),
-    crop.x,
-    crop.y,
-    crop.width,
-    crop.height,
-    0,
-    0,
-    size.width,
-    size.height,
-  );
+  const replaced = !!mask && !!options.background;
+  const single =
+    mask && options.background
+      ? compositeCrop(photo, crop, mask, options.background, size.width, size.height)
+      : (() => {
+          const c = canvas(size.width, size.height);
+          context(c).drawImage(
+            photo.image,
+            crop.x,
+            crop.y,
+            crop.width,
+            crop.height,
+            0,
+            0,
+            size.width,
+            size.height,
+          );
+          return c;
+        })();
   const singleContext = context(single);
   if (preset.mode === "print") {
     const rgba = singleContext.getImageData(
@@ -371,10 +737,12 @@ export async function exportPhoto(
       single.height,
     ).data;
     for (let i = 3; i < rgba.length; i += 4)
-      if (rgba[i] < 255)
+      if (rgba[i] < 255) {
+        freeCanvas(single);
         throw new Error(
           "Use an original photo with an opaque, natural background. Transparent cutouts are not supported for passport prints.",
         );
+      }
   } else {
     singleContext.globalCompositeOperation = "destination-over";
     singleContext.fillStyle = "#ffffff";
@@ -386,13 +754,21 @@ export async function exportPhoto(
     const { PDFDocument, rgb } = await warmExportTools();
     const doc = await PDFDocument.create();
     doc.setTitle("PortraitPass photo print");
-    doc.setCreator("PortraitPass");
+    doc.setCreator(PDF_CREATOR);
+    doc.setProducer("PortraitPass");
+    doc.setSubject(
+      `Photo print prepared with ${PDF_CREATOR}${replaced ? ` ${BACKGROUND_NOTE}.` : ""}`,
+    );
+    doc.setKeywords([
+      "PortraitPass",
+      "independent open-source tool",
+      "not affiliated with any government",
+      ...(replaced ? [BACKGROUND_NOTE] : []),
+    ]);
     const embedded = await doc.embedPng(
       await (await toBlob(single)).arrayBuffer(),
     );
-    const layout = options.sheet
-      ? layoutSheet(preset, options.paperId ?? "4x6", options.dpi ?? 300)
-      : null;
+    freeCanvas(single);
     const widthMm = layout?.widthMm ?? preset.widthMm,
       heightMm = layout?.heightMm ?? preset.heightMm;
     const pt = 72 / 25.4,
@@ -402,23 +778,20 @@ export async function exportPhoto(
     ];
     for (const p of placements)
       page.drawImage(embedded, {
-        x: (p.x * 72) / (options.dpi ?? 300),
-        y:
-          heightMm * pt -
-          (p.y * 72) / (options.dpi ?? 300) -
-          preset.heightMm * pt,
+        x: (p.x * 72) / dpi,
+        y: heightMm * pt - (p.y * 72) / dpi - preset.heightMm * pt,
         width: preset.widthMm * pt,
         height: preset.heightMm * pt,
       });
     for (const m of layout?.cutMarks ?? [])
       page.drawLine({
         start: {
-          x: (m.x1 * 72) / (options.dpi ?? 300),
-          y: heightMm * pt - (m.y1 * 72) / (options.dpi ?? 300),
+          x: (m.x1 * 72) / dpi,
+          y: heightMm * pt - (m.y1 * 72) / dpi,
         },
         end: {
-          x: (m.x2 * 72) / (options.dpi ?? 300),
-          y: heightMm * pt - (m.y2 * 72) / (options.dpi ?? 300),
+          x: (m.x2 * 72) / dpi,
+          y: heightMm * pt - (m.y2 * 72) / dpi,
         },
         thickness: 0.25,
         color: rgb(0.5, 0.5, 0.5),
@@ -431,12 +804,7 @@ export async function exportPhoto(
     };
   }
   let out = single;
-  if (options.sheet) {
-    const layout = layoutSheet(
-      preset,
-      options.paperId ?? "4x6",
-      options.dpi ?? 300,
-    );
+  if (layout) {
     out = canvas(layout.width, layout.height);
     const ctx = context(out);
     ctx.fillStyle = "#fff";
@@ -450,12 +818,12 @@ export async function exportPhoto(
       ctx.lineTo(m.x2, m.y2);
       ctx.stroke();
     }
+    freeCanvas(single);
   }
+  const encoded = await toBlob(out, `image/${options.format}`);
+  freeCanvas(out);
   return {
-    blob: await withDensity(
-      await toBlob(out, `image/${options.format}`),
-      options.dpi ?? 300,
-    ),
+    blob: await withDensity(encoded, dpi, replaced ? BACKGROUND_NOTE : undefined),
     filename: `portraitpass-${preset.id}-${suffix}.${options.format === "jpeg" ? "jpg" : "png"}`,
   };
 }
@@ -494,16 +862,30 @@ async function faceDetector() {
 export async function autoCrop(photo: LoadedPhoto, preset: Preset) {
   if (preset.mode === "original")
     throw new Error("Keep this digital original uncropped.");
+  assertEditable(photo);
   const detector = await faceDetector();
-  const { detections } = detector.detect(photo.image);
+  const work = analysisSource(photo);
+  let detections;
+  try {
+    ({ detections } = detector.detect(work.source));
+  } finally {
+    work.release();
+  }
   if (detections.length !== 1)
     throw new Error(
       detections.length
         ? "More than one face found. Choose a photo with one person."
         : "No clear face found. Use the manual positioning controls.",
     );
-  const b = detections[0].boundingBox;
-  if (!b) throw new Error("Use manual positioning for this photo.");
+  const raw = detections[0].boundingBox;
+  if (!raw) throw new Error("Use manual positioning for this photo.");
+  // Bounding boxes come back in pixels of the (possibly downscaled) analysis copy.
+  const b = {
+    originX: raw.originX / work.scale,
+    originY: raw.originY / work.scale,
+    width: raw.width / work.scale,
+    height: raw.height / work.scale,
+  };
   // The detector has no crown landmark. Infer the top of the portrait silhouette,
   // then show all positions for human correction rather than certifying a head size.
   let crownY = Math.max(0, b.originY - b.height * 0.65);
@@ -511,18 +893,26 @@ export async function autoCrop(photo: LoadedPhoto, preset: Preset) {
     await prepareBackground(photo);
     const mask = masks.get(photo.image);
     if (mask) {
-      const x = Math.max(0, Math.round(b.originX)),
-        w = Math.min(photo.width - x, Math.round(b.width));
-      const y0 = Math.max(0, Math.round(b.originY - b.height)),
-        y1 = Math.min(photo.height, Math.round(b.originY + b.height * 0.25));
-      const data = context(mask).getImageData(x, y0, w, y1 - y0).data;
-      for (let y = 0; y < y1 - y0; y++) {
-        let count = 0;
-        for (let col = 0; col < w; col++)
-          if (data[(y * w + col) * 4 + 3] > 200) count++;
-        if (count >= Math.max(4, w * 0.1)) {
-          crownY = y + y0;
-          break;
+      // The mask may be smaller than the photo; scan it in its own pixels.
+      const kx = mask.width / photo.width,
+        ky = mask.height / photo.height;
+      const x = Math.max(0, Math.round(b.originX * kx)),
+        w = Math.min(mask.width - x, Math.round(b.width * kx));
+      const y0 = Math.max(0, Math.round((b.originY - b.height) * ky)),
+        y1 = Math.min(
+          mask.height,
+          Math.round((b.originY + b.height * 0.25) * ky),
+        );
+      if (w > 0 && y1 > y0) {
+        const data = context(mask).getImageData(x, y0, w, y1 - y0).data;
+        for (let y = 0; y < y1 - y0; y++) {
+          let count = 0;
+          for (let col = 0; col < w; col++)
+            if (data[(y * w + col) * 4 + 3] > 200) count++;
+          if (count >= Math.max(4, w * 0.1)) {
+            crownY = (y + y0) / ky;
+            break;
+          }
         }
       }
     }
@@ -547,6 +937,7 @@ export async function autoCrop(photo: LoadedPhoto, preset: Preset) {
 let segmentPromise:
   Promise<import("@mediapipe/tasks-vision").ImageSegmenter> | undefined;
 export async function prepareBackground(photo: LoadedPhoto): Promise<void> {
+  assertEditable(photo);
   if (masks.has(photo.image)) return;
   if (!segmentPromise)
     segmentPromise = (async () => {
@@ -569,7 +960,14 @@ export async function prepareBackground(photo: LoadedPhoto): Promise<void> {
       throw e;
     });
   const segmenter = await segmentPromise;
-  const result = segmenter.segment(photo.image);
+  // Large photos are analysed on a downscaled copy; the mask is stretched back when compositing.
+  const work = analysisSource(photo);
+  let result;
+  try {
+    result = segmenter.segment(work.source);
+  } finally {
+    work.release();
+  }
   try {
     const mask = result.confidenceMasks?.[0];
     if (!mask) throw new Error("Background assistance was unavailable.");
@@ -584,12 +982,25 @@ export async function prepareBackground(photo: LoadedPhoto): Promise<void> {
       );
     }
     ctx.putImageData(rgba, 0, 0);
-    const full = canvas(photo.width, photo.height);
-    context(full).drawImage(small, 0, 0, photo.width, photo.height);
-    masks.set(photo.image, full);
+    masks.set(photo.image, small);
   } finally {
     result.close();
   }
+}
+/** The mask as a PNG data URL at source size, as saved projects and the Node adapter require. */
+function fullMaskDataUrl(photo: LoadedPhoto, mask: HTMLCanvasElement) {
+  if (mask.width === photo.width && mask.height === photo.height)
+    return mask.toDataURL("image/png");
+  if (photo.width * photo.height > MAX_CANVAS_AREA)
+    throw new PortraitError(
+      "MASK_TOO_LARGE",
+      "This photo is too large to save a background project in this browser. Save without the background, or use a photo under 16 megapixels.",
+    );
+  const full = canvas(photo.width, photo.height);
+  context(full).drawImage(mask, 0, 0, photo.width, photo.height);
+  const url = full.toDataURL("image/png");
+  freeCanvas(full);
+  return url;
 }
 function dataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -613,9 +1024,11 @@ export async function saveProject(
     sheet?: boolean;
   } = {},
 ) {
-  if (options.background && preset.mode === "general")
-    await prepareBackground(photo);
-  const mask = masks.get(photo.image);
+  if (preset.mode !== "original") assertEditable(photo);
+  const editing = !!options.background && preset.mode !== "original";
+  if (editing) await prepareBackground(photo);
+  // The mask is only saved when the background is actually being replaced.
+  const mask = editing ? masks.get(photo.image) : undefined;
   const project = {
     version: 1,
     outputKind:
@@ -635,10 +1048,10 @@ export async function saveProject(
       preset.mode === "original" ? "original" : (options.format ?? "jpeg"),
     ...(options.landmarks ? { landmarks: options.landmarks } : {}),
     background: {
-      enabled: !!options.background && preset.mode === "general",
+      enabled: editing,
       color: options.background ?? "#ffffff",
       tolerance: 24,
-      ...(mask ? { maskDataUrl: mask.toDataURL("image/png") } : {}),
+      ...(mask ? { maskDataUrl: fullMaskDataUrl(photo, mask) } : {}),
     },
     ...(preset.id === "general-id"
       ? { customSize: { widthMm: preset.widthMm, heightMm: preset.heightMm } }
@@ -647,6 +1060,32 @@ export async function saveProject(
   const validated = validateProject(project);
   if (!validated.valid) throw new Error(validated.issues[0].message);
   return new Blob([JSON.stringify(project)], { type: "application/json" });
+}
+/**
+ * Width and height from the PNG IHDR of a data URL, read from its first bytes so nothing large is
+ * decoded. Throws for anything that is not a well-formed PNG header.
+ */
+function pngSizeOfDataUrl(url: string) {
+  const prefix = "data:image/png;base64,";
+  if (!url.startsWith(prefix))
+    throw new PortraitError("INVALID_MASK", "Project mask must be a PNG.");
+  let bytes: Uint8Array;
+  try {
+    bytes = Uint8Array.from(atob(url.slice(prefix.length, prefix.length + 48)), (c) =>
+      c.charCodeAt(0),
+    );
+  } catch {
+    throw new PortraitError("INVALID_MASK", "Project mask could not be read.");
+  }
+  const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (
+    bytes.length < 24 ||
+    signature.some((v, i) => bytes[i] !== v) ||
+    String.fromCharCode(...bytes.subarray(12, 16)) !== "IHDR"
+  )
+    throw new PortraitError("INVALID_MASK", "Project mask could not be read.");
+  const view = new DataView(bytes.buffer);
+  return { width: view.getUint32(16), height: view.getUint32(20) };
 }
 export async function openProject(
   file: File,
@@ -666,35 +1105,54 @@ export async function openProject(
   const p = parseProject(await file.text());
   if (!p.source.dataUrl) throw new Error("This project has no embedded photo.");
   const match =
-    /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(
+    /^data:(image\/(?:jpeg|png|webp|heic|heif));base64,([A-Za-z0-9+/=]+)$/.exec(
       p.source.dataUrl,
     );
   if (!match) throw new Error("Invalid embedded image.");
+  const maskUrl = (p.background as { maskDataUrl?: string }).maskDataUrl;
+  if (p.background.enabled && !maskUrl)
+    throw new Error(
+      "This background project is missing its saved mask. Open the original photo and prepare it again.",
+    );
+  // Check the mask's PNG header against the stated source size before decoding anything.
+  if (maskUrl) {
+    const size = pngSizeOfDataUrl(maskUrl);
+    if (
+      size.width !== p.source.width ||
+      size.height !== p.source.height ||
+      size.width * size.height > 40_000_000
+    )
+      throw new Error("Project mask size is invalid.");
+  }
   const bytes = Uint8Array.from(atob(match[2]), (c) => c.charCodeAt(0));
   const photo = await loadPhoto(
     new File([bytes], p.source.name, { type: match[1] }),
     p.source.name.includes("synthetic-demo"),
   );
-  if (photo.width !== p.source.width || photo.height !== p.source.height) {
+  try {
+    if (isHeifPhoto(photo) && getPreset(p.presetId).mode !== "original")
+      throw new PortraitError("HEIC_UNSUPPORTED", HEIC_PRINT_MESSAGE);
+    if (
+      !photo.bytesOnly &&
+      (photo.width !== p.source.width || photo.height !== p.source.height)
+    )
+      throw new Error("The project dimensions do not match its photo.");
+    if (photo.bytesOnly && p.background.enabled) throw heicError();
+    if (maskUrl && !photo.bytesOnly) {
+      const img = new Image();
+      img.src = maskUrl;
+      await img.decode();
+      if (img.width !== photo.width || img.height !== photo.height)
+        throw new Error("Project mask size is invalid.");
+      // Photos above the canvas budget keep a downscaled mask; compositing stretches it back.
+      const fit = fitSize(photo.width, photo.height, MAX_CANVAS_AREA);
+      const c = canvas(fit.width, fit.height);
+      context(c).drawImage(img, 0, 0, fit.width, fit.height);
+      masks.set(photo.image, c);
+    }
+  } catch (e) {
     releasePhoto(photo);
-    throw new Error("The project dimensions do not match its photo.");
-  }
-  const maskUrl = (p.background as { maskDataUrl?: string }).maskDataUrl;
-  if (p.background.enabled && !maskUrl) {
-    releasePhoto(photo);
-    throw new Error(
-      "This background project is missing its saved mask. Open the original photo and prepare it again.",
-    );
-  }
-  if (maskUrl) {
-    const img = new Image();
-    img.src = maskUrl;
-    await img.decode();
-    if (img.width !== photo.width || img.height !== photo.height)
-      throw new Error("Project mask size is invalid.");
-    const c = canvas(photo.width, photo.height);
-    context(c).drawImage(img, 0, 0);
-    masks.set(photo.image, c);
+    throw e instanceof Error ? e : new Error("This project could not be opened.");
   }
   return {
     photo,

@@ -1,4 +1,9 @@
-import { PortraitError, type Preset, type Paper } from "./types.js";
+import {
+  PortraitError,
+  type DocumentNotice,
+  type Preset,
+  type Paper,
+} from "./types.js";
 const checkedAt = "2026-09-28";
 export const PRESETS: Preset[] = [
   {
@@ -8,7 +13,14 @@ export const PRESETS: Preset[] = [
     widthMm: 50.8,
     heightMm: 50.8,
     headMinMm: 25.4,
-    headMaxMm: 34.925, // Exact 1 3/8 inches from the official size requirement.
+    headMaxMm: 34.925, // Exact 1 3/8 inches from the published size requirement.
+    eyeMinMm: 28.575, // 1 1/8 inches from the bottom of the photo.
+    eyeMaxMm: 34.925, // 1 3/8 inches from the bottom of the photo.
+    backgroundEdit: "forbidden",
+    notes: [
+      "Someone else takes the photo, or use a tripod. Selfies are not accepted.",
+      "Plain white or off-white background. The State Department rejects photos changed with software, filters or AI.",
+    ],
     sourceUrl: "https://travel.state.gov/en/passports/apply/help/photos.html",
     checkedAt,
     mode: "print",
@@ -23,6 +35,11 @@ export const PRESETS: Preset[] = [
     heightMm: 45,
     headMinMm: 29,
     headMaxMm: 34,
+    backgroundEdit: "forbidden",
+    notes: [
+      "HM Passport Office asks for photos printed to a professional standard and not cut down from a larger picture. A photo lab or booth is the safer route for paper forms.",
+      "Applying online? Use UK passport · original instead and upload the uncropped photo.",
+    ],
     sourceUrl: "https://www.gov.uk/photos-for-passports/photo-requirements",
     checkedAt,
     mode: "print",
@@ -37,6 +54,10 @@ export const PRESETS: Preset[] = [
     heightMm: 45,
     headMinMm: 32,
     headMaxMm: 36,
+    backgroundEdit: "forbidden",
+    notes: [
+      "Print at a photo lab: dye-sublimation on glossy paper of at least 200 gsm. Home inkjet prints are not accepted.",
+    ],
     sourceUrl: "https://www.passports.gov.au/help/passport-photos",
     checkedAt,
     mode: "print",
@@ -49,6 +70,7 @@ export const PRESETS: Preset[] = [
     country: "Custom",
     widthMm: 35,
     heightMm: 45,
+    backgroundEdit: "unspecified",
     sourceUrl: "",
     checkedAt,
     mode: "general",
@@ -61,15 +83,19 @@ export const PRESETS: Preset[] = [
     country: "United States",
     widthMm: 50.8,
     heightMm: 50.8,
+    backgroundEdit: "forbidden",
+    notes: [
+      "Upload the original, unedited photo. JPEG, PNG, HEIC or HEIF, 54 KB to 10 MB.",
+    ],
     sourceUrl:
       "https://travel.state.gov/en/passports/renew-replace/online/upload-digital-photo.html",
     checkedAt,
     mode: "original",
     editingPolicy:
-      "Export original bytes, without cropping or editing. The official application handles positioning.",
+      "Export original bytes, without cropping or editing. The passport application service handles positioning.",
     minBytes: 54000,
     maxBytes: 10000000,
-    mimeTypes: ["image/jpeg", "image/png"],
+    mimeTypes: ["image/jpeg", "image/png", "image/heic", "image/heif"],
   },
   {
     id: "uk-online",
@@ -77,6 +103,8 @@ export const PRESETS: Preset[] = [
     country: "United Kingdom",
     widthMm: 35,
     heightMm: 45,
+    backgroundEdit: "forbidden",
+    notes: ["Do not crop. The online service crops the photo for you."],
     sourceUrl: "https://www.gov.uk/photos-for-passports",
     checkedAt,
     mode: "original",
@@ -86,6 +114,31 @@ export const PRESETS: Preset[] = [
     maxBytes: 10000000,
     minWidth: 600,
     minHeight: 750,
+    // Dimensions must be measured, so only formats every browser can decode.
+    mimeTypes: ["image/jpeg", "image/png"],
+  },
+];
+/** Documents that need an approved photographer or provider. Never offered as presets. */
+export const DOCUMENT_NOTICES: DocumentNotice[] = [
+  {
+    id: "ca-passport",
+    name: "Canadian passport",
+    country: "Canada",
+    reason:
+      "Canada requires passport photos taken in person by a commercial photographer or photo studio. Photos made with this tool will not be accepted.",
+    sourceUrl:
+      "https://www.canada.ca/en/immigration-refugees-citizenship/services/canadian-passports/photos.html",
+    checkedAt,
+  },
+  {
+    id: "de-passport",
+    name: "German passport or ID card",
+    country: "Germany",
+    reason:
+      "Since 1 May 2025 German passport and ID photos must be digital, taken at the authority or by a certified provider. Paper and home photos are not accepted.",
+    sourceUrl:
+      "https://www.bmi.bund.de/SharedDocs/kurzmeldungen/DE/2025/04/neue-passbilder.html",
+    checkedAt,
   },
 ];
 export const PAPERS: Paper[] = [

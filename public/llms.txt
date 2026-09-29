@@ -1,27 +1,47 @@
 # PortraitPass
 
-Private, local passport and ID photo preparation. Source-backed printed dimensions, head guides and exact-sized print sheets. No account, upload, watermark or approval guarantee.
+Passport photos, sized exactly. Every measurement shown, your face never edited, 40¢ to print. A free, open-source (MIT) browser tool: your photo never leaves your device. No account, upload, watermark or paywall. We check sizes and positions; the issuing authority decides acceptance.
+
+PortraitPass is an independent open-source project, not affiliated with or endorsed by any government or passport office.
+
+The website is the product. The CLI and MCP server below are thin extras for AI assistants working on local files. There is no npm package; clone the repository and run pnpm install.
 
 ## Agent interfaces
 - Core: TypeScript exports from src/core/index.ts.
 - CLI: ./scripts/portraitpass presets --json; ./scripts/portraitpass inspect --input /path/photo.jpg --json.
-- Render: ./scripts/portraitpass render --input /path/photo.jpg --preset us-passport --format png --output /path/photo-sized.png --json.
-- Sheet: ./scripts/portraitpass sheet --input /path/photo.jpg --preset uk-passport --paper 4x6 --format pdf --output /path/sheet.pdf --json.
+- Render: ./scripts/portraitpass render --input /path/photo.jpg --preset us-passport --output /path/photo-sized.png --json. The format is inferred from the output extension (.jpg, .png, .pdf); a conflicting --format or an unsupported extension is an error (FORMAT_EXTENSION_MISMATCH).
+- Sheet: ./scripts/portraitpass sheet --input /path/photo.jpg --preset uk-passport --paper 4x6 --output /path/sheet.pdf --json.
 - Browser handoff: ./scripts/portraitpass project --input /path/photo.jpg --preset uk-passport --embed --output /path/handoff.portraitpass.json --json.
-- MCP stdio: /absolute/path/to/portraitpass/scripts/portraitpass-mcp after pnpm install. Use the direct wrapper, not package-manager lifecycle commands, to keep stdout clean. Tools: portraitpass_presets, portraitpass_inspect, portraitpass_crop, portraitpass_layout, portraitpass_render, portraitpass_sheet, portraitpass_project.
+- MCP stdio: /absolute/path/to/portraitpass/scripts/portraitpass-mcp after pnpm install. Use the direct wrapper, not package-manager lifecycle commands, to keep stdout clean. Tools: portraitpass_presets, portraitpass_inspect, portraitpass_crop, portraitpass_layout, portraitpass_render, portraitpass_sheet, portraitpass_project. MCP paths must be absolute.
+- render and sheet results include checks (head, eyes, centre, resolution measurements: pass, fail or unknown), a warnings array and backgroundReplaced. Head height and eye line are measurements, not blockers: a fail adds a warning and the file is still written. Relay warnings to the person.
+- Exit codes: 0 ok, 1 internal, 2 invalid command or data, 3 input problem (including ORIGINAL_NOT_ACCEPTED, which lists issues), 4 output problem (exists, cannot write, would overwrite source or project). Errors are JSON: {"ok":false,"error":{"code","message"}}.
 - Full schema, examples and safety semantics: docs/agent-guide.md in the repository.
 
 ## Presets
-us-passport, uk-passport, au-passport: print preparation only. general-id: custom dimensions and optional persisted alpha-mask background. us-online, uk-online: preserve original bytes; never crop or retouch. Papers: 4x6, a4, letter. Default 300 DPI. All coordinates use oriented source pixels.
+us-passport, uk-passport, au-passport: print preparation only, sized to the published dimensions. general-id: custom dimensions and optional background replacement. us-online, uk-online: return the original bytes unchanged; never crop or edit; they fail with ORIGINAL_NOT_ACCEPTED (exit 3) if the file breaks the size, resolution or type limits, and the output extension must match the source type; us-online also passes HEIC and HEIF through; HEIC/HEIF are refused for every other preset (UNSUPPORTED_IMAGE), including when saving a project. Papers: 4x6, a4, letter. Default 300 DPI. All coordinates use oriented source pixels.
+
+Each preset lists its source URL, check date, background-edit rule and notes. Tell the person the notes:
+- US passport: someone else takes the photo, or use a tripod. No selfies.
+- UK passport print: professionally printed, not cut down from a larger picture. For online applications use uk-online.
+- Australia passport: print at a photo lab, dye-sublimation glossy paper of at least 200 gsm.
+
+Not DIY, so no preset: Canadian passport (commercial photographer required) and German passport or ID card (digital photo via the authority or a certified provider since 1 May 2025). They are in the core library as DOCUMENT_NOTICES but the CLI and MCP presets list does not include them. Tell the person; do not substitute another preset.
+
+Background replacement works for print and general presets, never for original modes. It is off by default for US, UK and Australia passports because their rules forbid altered photos. Outputs that use it carry the metadata note "Background replaced with PortraitPass".
 
 ## Privacy and limits
-No external calls or keys. Sources: single-frame JPEG/PNG/WebP, at most 20 MiB and 40 megapixels. Portable project version 1: JSON with source data URL, crop, presetId, dpi, paperId, format and background settings. Max project 60 MiB. Outputs require explicit paths, no overwrite by default. Original files are always protected. Exported projects intentionally contain the original photo; share them deliberately.
+Your photo never leaves your device. No external calls, keys, cookies, analytics or third-party scripts; fonts and models are self-hosted. The host (Vercel) logs request data such as IP addresses, separately from photos. Sources: single-frame JPEG/PNG/WebP (HEIC/HEIF only for the us-online original passthrough), at most 20 MiB and 40 megapixels. Portable project version 1: JSON with source data URL, crop, presetId, dpi, paperId, format, optional landmarks (saved only when set) and background settings (the mask is kept only while background replacement is on); max 60 MiB. Project files contain the photo, settings, head positions if set, and the background mask only while background replacement is on, so share them deliberately. Outputs require explicit paths, no overwrite by default; source and project files are always protected.
 
-## Official guidance
+## Site pages
+/privacy/, /terms/, /accessibility/, /support/ (optional tips, nothing is unlocked).
+
+## Source rules
 - US print: https://travel.state.gov/en/passports/apply/help/photos.html
 - US online renewal: https://travel.state.gov/en/passports/renew-replace/online/upload-digital-photo.html
 - UK print: https://www.gov.uk/photos-for-passports/photo-requirements
 - UK online: https://www.gov.uk/photos-for-passports
 - Australia: https://www.passports.gov.au/help/passport-photos
+- Canada (photographer required): https://www.canada.ca/en/immigration-refugees-citizenship/services/canadian-passports/photos.html
+- Germany (digital photos): https://www.bmi.bund.de/SharedDocs/kurzmeldungen/DE/2025/04/neue-passbilder.html
 
-Geometric measurements do not certify document acceptance. The person must review likeness, lighting, expression, recency and the destination’s official requirements.
+Geometric measurements do not decide acceptance. The person must check likeness, lighting, expression, recency and the destination's current rules.

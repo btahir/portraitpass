@@ -61,3 +61,39 @@ test('real CPU face assistance detects synthetic single/no/multiple faces and se
   await context.setOffline(true);
   await expect(page.getByRole('button', { name: 'Try a sample', exact: false })).toBeEnabled();
 });
+
+test('photos above the analysis budget are analysed on a downscaled copy and still export at full size with a saved full-size mask', async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto('/');
+  const result = await page.evaluate(async () => {
+    const enginePath = '/src/browser/engine.ts', corePath = '/src/core/index.ts';
+    const engine = await import(/* @vite-ignore */ enginePath), core = await import(/* @vite-ignore */ corePath);
+    const demo = await engine.loadDemo(), preset = core.getPreset('us-passport');
+    const reference = await engine.autoCrop(demo, preset);
+    // 2.5x enlargement of the demo: 2560 x 3840 = 9.8 MP, above the 4 MP analysis budget, below the 16 MP canvas budget.
+    const big = document.createElement('canvas'); big.width = demo.width * 2.5; big.height = demo.height * 2.5;
+    big.getContext('2d')!.drawImage(demo.image, 0, 0, big.width, big.height);
+    const blob = await new Promise<Blob>(resolve => big.toBlob(b => resolve(b!), 'image/png'));
+    const photo = await engine.loadPhoto(new File([blob], 'big-demo.png', { type: 'image/png' }));
+    const assist = await engine.autoCrop(photo, preset);
+    const crop = core.defaultCrop(photo.width, photo.height, preset);
+    const saved = JSON.parse(await (await engine.saveProject(photo, preset, crop, { background: '#ffffff' })).text());
+    const mask = new Image(); mask.src = saved.background.maskDataUrl; await mask.decode();
+    const exported = await engine.exportPhoto(photo, preset, crop, { format: 'png', background: '#ffffff' });
+    const bytes = new Uint8Array(await exported.blob.arrayBuffer());
+    const response = {
+      scale: photo.width / demo.width,
+      reference: reference.landmarks, landmarks: assist.landmarks,
+      photo: [photo.width, photo.height], mask: [mask.width, mask.height],
+      hasNote: new TextDecoder('latin1').decode(bytes).includes('Description\0Background replaced with PortraitPass'),
+      enabled: saved.background.enabled,
+    };
+    engine.releasePhoto(demo); engine.releasePhoto(photo);
+    return response;
+  });
+  expect(result.mask).toEqual(result.photo);
+  expect(result.enabled).toBe(true);
+  expect(result.hasNote).toBe(true);
+  for (const key of ['crownY', 'eyesY', 'chinY'] as const)
+    expect(Math.abs(result.landmarks[key] / result.scale - result.reference[key])).toBeLessThan(40);
+});

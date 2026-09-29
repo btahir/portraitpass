@@ -6,9 +6,9 @@ import { createElement } from "react";
 import { SITE_URL } from "../src/config";
 const routes: Record<string, { title: string; description: string }> = {
   "/": {
-    title: "PortraitPass — Your next chapter starts here.",
+    title: "PortraitPass — Free passport photo maker, sized exactly",
     description:
-      "A private passport photo studio. Precisely sized photos and print sheets in your browser. Free, no upload, no watermark.",
+      "Free passport and ID photo maker that runs in your browser. Exact sizes, head and eye guides, and print sheets. Nothing is uploaded, no watermark, no account.",
   },
   "/support/": {
     title: "Support PortraitPass",
@@ -16,12 +16,27 @@ const routes: Record<string, { title: string; description: string }> = {
       "Help keep PortraitPass free, private and available to everyone.",
   },
   "/about/": {
-    title: "About & privacy — PortraitPass",
+    title: "About PortraitPass",
     description:
-      "Your photos stay on your device. Learn how the open-source PortraitPass studio works.",
+      "An independent open-source passport photo tool. Your photos stay on your device. Learn how it works and what it cannot promise.",
+  },
+  "/privacy/": {
+    title: "Privacy — PortraitPass",
+    description:
+      "Your photo never leaves your device. What the host logs, why there are no cookies or analytics, and what a saved project file contains.",
+  },
+  "/terms/": {
+    title: "Terms — PortraitPass",
+    description:
+      "PortraitPass is a free open-source tool provided as is, under the MIT License, with no guarantee that any photo is accepted.",
+  },
+  "/accessibility/": {
+    title: "Accessibility — PortraitPass",
+    description:
+      "How PortraitPass works with a keyboard and screen reader, known limits, and how to report a barrier.",
   },
   "/us-passport-photo/": {
-    title: "US passport photo 2×2 — PortraitPass",
+    title: "US passport photo, 2×2 inches — PortraitPass",
     description:
       "Prepare a 2 by 2 inch US passport photo and print sheet locally, with source-backed dimensions and framing guides.",
   },
