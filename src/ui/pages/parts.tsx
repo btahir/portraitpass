@@ -1,8 +1,11 @@
 import type { ReactNode } from "react";
 import type { DocumentSpec } from "../../core/documents";
+import type { Locale } from "../../i18n";
+import { localizeDocument } from "../../i18n/localize";
+import { strings } from "../../i18n/strings";
 import {
-  CHECK_NOTE,
   canMakeAtHome,
+  checkNote,
   checkedDate,
   docPath,
   fmtDate,
@@ -18,6 +21,7 @@ export function PageShell({
   lede,
   crumbs,
   children,
+  locale = "en",
 }: {
   id: string;
   eyebrow?: string;
@@ -25,14 +29,18 @@ export function PageShell({
   lede?: ReactNode;
   crumbs?: { href?: string; label: string }[];
   children: ReactNode;
+  locale?: Locale;
 }) {
+  const t = strings(locale).shell;
   return (
     <main id="main" className="content-page pg" data-pp-page={id}>
       {crumbs && (
-        <nav className="pg-crumbs" aria-label="Breadcrumb">
+        <nav className="pg-crumbs" aria-label={t.breadcrumb}>
           <ol>
             <li>
-              <a href="/">Home</a>
+              <a href="/" hrefLang={locale === "en" ? undefined : "en"}>
+                {t.home}
+              </a>
             </li>
             {crumbs.map((c) => (
               <li key={c.label}>
@@ -102,15 +110,16 @@ export function FaqList({ items }: { items: Faq[] }) {
   );
 }
 
-export function DocLinks({ docs }: { docs: DocumentSpec[] }) {
+export function DocLinks({ docs, locale = "en" }: { docs: DocumentSpec[]; locale?: Locale }) {
+  const f = strings(locale).fmt;
   return (
     <ul className="pg-doclinks">
       {docs.map((d) => (
         <li key={d.id}>
-          <a href={docPath(d)}>{d.name}</a>
+          <a href={docPath(d, locale)}>{localizeDocument(d, locale).name}</a>
           <span>
-            {specSummary(d)}
-            {!canMakeAtHome(d) && <em className="pg-tag">Not at home</em>}
+            {specSummary(d, locale)}
+            {!canMakeAtHome(d) && <em className="pg-tag">{f.notAtHome}</em>}
           </span>
         </li>
       ))}
@@ -118,7 +127,8 @@ export function DocLinks({ docs }: { docs: DocumentSpec[] }) {
   );
 }
 
-export function Sources({ doc }: { doc: DocumentSpec }) {
+export function Sources({ doc, locale = "en" }: { doc: DocumentSpec; locale?: Locale }) {
+  const f = strings(locale).fmt;
   return (
     <ul className="pg-sources">
       {doc.sources.map((s) => (
@@ -127,8 +137,7 @@ export function Sources({ doc }: { doc: DocumentSpec }) {
             {s.title}
           </a>
           <span>
-            {s.kind === "primary" ? "Issuing authority" : "Secondary source"}.
-            Checked {fmtDate(s.checkedAt)}.
+            {f.sourceLine(s.kind === "primary" ? f.sourcePrimary : f.sourceSecondary, fmtDate(s.checkedAt, locale))}
           </span>
         </li>
       ))}
@@ -136,8 +145,8 @@ export function Sources({ doc }: { doc: DocumentSpec }) {
   );
 }
 
-export function Disclaimer() {
-  return <p className="pg-note">{CHECK_NOTE}</p>;
+export function Disclaimer({ locale = "en" }: { locale?: Locale }) {
+  return <p className="pg-note">{checkNote(locale)}</p>;
 }
 
 export { checkedDate };

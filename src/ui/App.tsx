@@ -6,6 +6,9 @@ import {
   useRef,
   useState,
 } from "react";
+import { LOCALES, localeOf } from "../i18n";
+import { loadLocale } from "../i18n/registry";
+import { strings } from "../i18n/strings";
 import { ChromeContext, SiteFooter, SiteHeader } from "./chrome";
 import { Home } from "./home/Home";
 import { matchStaticRoute } from "./routes";
@@ -16,6 +19,11 @@ import "./styles.css";
 const Studio = lazy(() => import("./studio/Studio"));
 
 const DEFAULT_DOC = "us-passport";
+
+// A translated page needs its language pack before the first render. English pages skip this, so
+// their bundle never includes (or waits for) another language. If the pack cannot load, the
+// prerendered page stays as it is. The prerender script has no window and loads packs itself.
+if (typeof window !== "undefined") await loadLocale(localeOf(window.location.pathname.replace(/\/*$/, "/")));
 
 function normalizePath(path: string) {
   return path === "/" ? path : `${path.replace(/\/+$/, "")}/`;
@@ -73,6 +81,11 @@ export default function App({
     setLoc({ path: normalizePath(target.pathname), search: target.search });
   }, []);
 
+  const locale = localeOf(loc.path);
+  useEffect(() => {
+    document.documentElement.lang = LOCALES[locale].hreflang;
+    document.documentElement.dir = LOCALES[locale].dir;
+  }, [locale]);
   const onStudio = loc.path === "/studio/";
   useEffect(() => {
     if (homeTitle.current === null) homeTitle.current = document.title;
@@ -121,11 +134,11 @@ export default function App({
     <ChromeContext.Provider value={true}>
       <div className="app">
         <a className="skip-link" href="#main">
-          Skip to content
+          {strings(locale).chrome.skip}
         </a>
-        <SiteHeader force />
+        <SiteHeader force path={loc.path} />
         {body}
-        <SiteFooter force />
+        <SiteFooter force path={loc.path} />
       </div>
     </ChromeContext.Provider>
   );

@@ -63,7 +63,7 @@
 .content-page.pg .pg-note {
   font-size: 13px;
   color: var(--muted);
-  border-left: 2px solid var(--accent);
+  border-inline-start: 2px solid var(--accent);
   padding: 2px 0 2px 14px;
   margin: 20px 0;
 }
@@ -89,7 +89,7 @@
   border: 1px solid var(--line);
 }
 .pg-table caption {
-  text-align: left;
+  text-align: start;
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 1.35px;
@@ -100,7 +100,7 @@
 }
 .pg-table th,
 .pg-table td {
-  text-align: left;
+  text-align: start;
   vertical-align: top;
   padding: 11px 14px;
   border-top: 1px solid var(--line);
@@ -137,7 +137,7 @@
 }
 .pg-tag {
   display: inline-block;
-  margin-left: 8px;
+  margin-inline-start: 8px;
   padding: 1px 7px;
   border: 1px solid var(--line);
   font-style: normal;
@@ -148,7 +148,7 @@
 }
 .pg-rules,
 .pg-steps {
-  padding-left: 20px;
+  padding-inline-start: 20px;
   margin: 12px 0;
 }
 .pg-rules li,
@@ -260,4 +260,13 @@
 }
 .pg-tiers .support-tiers {
   margin-top: 16px;
+}
+
+/* Language switcher (chrome.tsx). The footer version lists every language; the current one is bold. */
+.footer-lang [aria-current="true"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+.site-nav .lang-link {
+  white-space: nowrap;
 }

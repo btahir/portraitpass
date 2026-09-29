@@ -1,117 +1,143 @@
-// Pure text helpers for the static pages. Every sentence about a document's
-// numbers is built here from the dataset, so pages stay in step with the data.
+// Pure text helpers for the static pages. Every sentence about a document's numbers is built here
+// from the dataset, so pages stay in step with the data. Words come from the language tables in
+// src/i18n; every helper takes the locale, and the English output is the default.
 import { DOCUMENTS, type DocumentSpec, type DigitalSpec, type PrintSpec } from "../../core/documents";
 import { documentPreset } from "../../core/catalog";
 import { layoutSheet } from "../../core/geometry";
 import { PAPERS } from "../../core/presets";
 import { SITE_URL } from "../../config";
+import { LOCALES, localizeDigits, withLocale, type Locale } from "../../i18n";
+import { localizeDocument } from "../../i18n/localize";
+import { strings } from "../../i18n/strings";
 
-export const CHECK_NOTE =
-  "We check sizes and positions; the issuing authority decides acceptance.";
-export const RULES_NOTE =
-  "Rules change. Check the issuing authority’s current instructions before you apply.";
+const T = (L: Locale) => strings(L);
+
+export const checkNote = (L: Locale = "en") => T(L).fmt.checkNote;
+export const rulesNote = (L: Locale = "en") => T(L).fmt.rulesNote;
 
 // ---------------------------------------------------------------- numbers
-const trim = (n: number, dp: number) => String(Number(n.toFixed(dp)));
-export const fmtMm = (n: number) => trim(n, 1);
-export function fmtIn(mm: number): string {
+/** Digits in the locale's own script (a no-op except for locales that set `digits`). */
+export const nd = (n: number | string, L: Locale = "en") => localizeDigits(String(n), L);
+function trim(n: number, dp: number, L: Locale): string {
+  const s = String(Number(n.toFixed(dp)));
+  const { decimal } = LOCALES[L];
+  return nd(decimal === "." ? s : s.replace(".", decimal), L);
+}
+export const fmtMm = (n: number, L: Locale = "en") => trim(n, 1, L);
+export function fmtIn(mm: number, L: Locale = "en"): string {
   const x = mm / 25.4;
   const eighths = x * 8;
   if (Math.abs(eighths - Math.round(eighths)) < 0.01) {
     const whole = Math.floor(Math.round(eighths) / 8);
     const rest = Math.round(eighths) % 8;
-    if (rest === 0) return String(whole);
+    if (rest === 0) return nd(whole, L);
     let num = rest;
     let den = 8;
     while (num % 2 === 0) {
       num /= 2;
       den /= 2;
     }
-    return whole ? `${whole} ${num}/${den}` : `${num}/${den}`;
+    return nd(whole ? `${whole} ${num}/${den}` : `${num}/${den}`, L);
   }
-  return trim(x, 2);
+  return trim(x, 2, L);
 }
 export const mmToPx = (mm: number, dpi = 300) => Math.round((mm * dpi) / 25.4);
-const withCommas = (n: number) => n.toLocaleString("en-US");
+/** Integer with the locale's thousands separator (Spanish leaves four-digit numbers ungrouped). */
+export function withCommas(n: number, L: Locale = "en"): string {
+  const { thousands, minGroupDigits } = LOCALES[L];
+  const [int, frac] = String(n).split(".");
+  const grouped =
+    int.replace("-", "").length >= minGroupDigits ? int.replace(/\B(?=(\d{3})+(?!\d))/g, thousands) : int;
+  return nd(frac ? `${grouped}${LOCALES[L].decimal}${frac}` : grouped, L);
+}
 
-export function printSize(p: PrintSpec): string {
-  return `${fmtMm(p.widthMm)} × ${fmtMm(p.heightMm)} mm (${fmtIn(p.widthMm)} × ${fmtIn(p.heightMm)} in)`;
+export function printSize(p: PrintSpec, L: Locale = "en"): string {
+  return `${fmtMm(p.widthMm, L)} × ${fmtMm(p.heightMm, L)} mm (${fmtIn(p.widthMm, L)} × ${fmtIn(p.heightMm, L)} in)`;
 }
-export function printSizeShort(p: PrintSpec): string {
-  return `${fmtMm(p.widthMm)} × ${fmtMm(p.heightMm)} mm`;
+export function printSizeShort(p: PrintSpec, L: Locale = "en"): string {
+  return `${fmtMm(p.widthMm, L)} × ${fmtMm(p.heightMm, L)} mm`;
 }
-function rangeMm(min?: number, max?: number): string | undefined {
+function rangeMm(min: number | undefined, max: number | undefined, L: Locale): string | undefined {
+  const f = T(L).fmt;
   if (min !== undefined && max !== undefined)
-    return `${fmtMm(min)} to ${fmtMm(max)} mm (${fmtIn(min)} to ${fmtIn(max)} in)`;
-  if (min !== undefined) return `at least ${fmtMm(min)} mm (${fmtIn(min)} in)`;
-  if (max !== undefined) return `at most ${fmtMm(max)} mm (${fmtIn(max)} in)`;
+    return `${f.between(fmtMm(min, L), fmtMm(max, L))} mm (${f.between(fmtIn(min, L), fmtIn(max, L))} in)`;
+  if (min !== undefined) return f.atLeast(`${fmtMm(min, L)} mm (${fmtIn(min, L)} in)`);
+  if (max !== undefined) return f.atMost(`${fmtMm(max, L)} mm (${fmtIn(max, L)} in)`);
   return undefined;
 }
 /** Short form for table cells: "25.4 to 34.9 mm". */
-export function compactMm(min?: number, max?: number): string | undefined {
-  if (min !== undefined && max !== undefined) return `${fmtMm(min)} to ${fmtMm(max)} mm`;
-  if (min !== undefined) return `≥ ${fmtMm(min)} mm`;
-  if (max !== undefined) return `≤ ${fmtMm(max)} mm`;
-  return undefined;
-}
-export function compactRatio(min?: number, max?: number): string | undefined {
-  if (min !== undefined && max !== undefined) return `${pct(min)} to ${pct(max)}`;
-  if (min !== undefined) return `≥ ${pct(min)}`;
-  if (max !== undefined) return `≤ ${pct(max)}`;
-  return undefined;
-}
-export const headRange = (p: PrintSpec) => rangeMm(p.headMinMm, p.headMaxMm);
-export const eyeRange = (p: PrintSpec) => rangeMm(p.eyeMinMm, p.eyeMaxMm);
-
-const pct = (x: number) => `${Math.round(x * 100)}%`;
-function ratioRange(min?: number, max?: number): string | undefined {
+export function compactMm(min: number | undefined, max: number | undefined, L: Locale = "en"): string | undefined {
+  const f = T(L).fmt;
   if (min !== undefined && max !== undefined)
-    return `${pct(min)} to ${pct(max)} of the image height`;
-  if (min !== undefined) return `at least ${pct(min)} of the image height`;
-  if (max !== undefined) return `at most ${pct(max)} of the image height`;
+    return `${f.compactBetween(fmtMm(min, L), fmtMm(max, L))} mm`;
+  if (min !== undefined) return `${f.compactAtLeast(fmtMm(min, L))} mm`;
+  if (max !== undefined) return `${f.compactAtMost(fmtMm(max, L))} mm`;
   return undefined;
 }
-export const headRatio = (d: DigitalSpec) => ratioRange(d.headRatioMin, d.headRatioMax);
-export const eyeRatio = (d: DigitalSpec) => ratioRange(d.eyeRatioMin, d.eyeRatioMax);
+const pct = (x: number, L: Locale) => nd(T(L).fmt.percent(Math.round(x * 100)), L);
+export function compactRatio(min: number | undefined, max: number | undefined, L: Locale = "en"): string | undefined {
+  const f = T(L).fmt;
+  if (min !== undefined && max !== undefined) return f.compactBetween(pct(min, L), pct(max, L));
+  if (min !== undefined) return f.compactAtLeast(pct(min, L));
+  if (max !== undefined) return f.compactAtMost(pct(max, L));
+  return undefined;
+}
+export const headRange = (p: PrintSpec, L: Locale = "en") => rangeMm(p.headMinMm, p.headMaxMm, L);
+export const eyeRange = (p: PrintSpec, L: Locale = "en") => rangeMm(p.eyeMinMm, p.eyeMaxMm, L);
 
-function aspectText(a: number): string {
-  if (Math.abs(a - 1) < 0.001) return "square (1:1)";
-  if (Math.abs(a - 0.75) < 0.001) return "portrait, 3:4";
-  return `width to height ratio ${trim(a, 2)}`;
+function ratioRange(min: number | undefined, max: number | undefined, L: Locale): string | undefined {
+  const f = T(L).fmt;
+  if (min !== undefined && max !== undefined)
+    return `${f.between(pct(min, L), pct(max, L))}${f.ofImageHeight}`;
+  if (min !== undefined) return `${f.atLeast(pct(min, L))}${f.ofImageHeight}`;
+  if (max !== undefined) return `${f.atMost(pct(max, L))}${f.ofImageHeight}`;
+  return undefined;
+}
+export const headRatio = (d: DigitalSpec, L: Locale = "en") => ratioRange(d.headRatioMin, d.headRatioMax, L);
+export const eyeRatio = (d: DigitalSpec, L: Locale = "en") => ratioRange(d.eyeRatioMin, d.eyeRatioMax, L);
+
+function aspectText(a: number, L: Locale): string {
+  const f = T(L).fmt;
+  if (Math.abs(a - 1) < 0.001) return f.aspectSquare;
+  if (Math.abs(a - 0.75) < 0.001) return f.aspectPortrait;
+  return f.aspectRatio(trim(a, 2, L));
 }
 
-export function digitalDims(d: DigitalSpec): string | undefined {
+export function digitalDims(d: DigitalSpec, L: Locale = "en"): string | undefined {
+  const f = T(L).fmt;
   if (d.originalOnly) {
     const bits: string[] = [];
     if (d.minWidthPx && d.minHeightPx)
-      bits.push(`at least ${d.minWidthPx} × ${d.minHeightPx} px`);
-    else if (d.minWidthPx) bits.push(`at least ${d.minWidthPx} px wide`);
+      bits.push(f.atLeast(`${nd(d.minWidthPx, L)} × ${nd(d.minHeightPx, L)} px`));
+    else if (d.minWidthPx) bits.push(f.atLeastWide(nd(d.minWidthPx, L)));
     return bits.length ? bits.join(", ") : undefined;
   }
-  if (d.widthPx && d.heightPx) return `${d.widthPx} × ${d.heightPx} px`;
+  if (d.widthPx && d.heightPx) return `${nd(d.widthPx, L)} × ${nd(d.heightPx, L)} px`;
   const { minWidthPx: a, minHeightPx: b, maxWidthPx: c, maxHeightPx: e } = d;
+  const withAspect = (dims: string) => (d.aspect ? f.withAspect(dims, aspectText(d.aspect, L)) : dims);
   if (a && b && c && e) {
-    if (a === b && c === e) return `${a} to ${c} px per side, square`;
-    return `from ${a} × ${b} px up to ${c} × ${e} px${d.aspect ? `, ${aspectText(d.aspect)}` : ""}`;
+    if (a === b && c === e) return f.perSideSquare(nd(a, L), nd(c, L));
+    return withAspect(f.fromUpTo(nd(a, L), nd(b, L), nd(c, L), nd(e, L)));
   }
-  if (a && b)
-    return `at least ${a} × ${b} px${d.aspect ? `, ${aspectText(d.aspect)}` : ""}`;
-  if (c && e) return `at most ${c} × ${e} px`;
-  if (d.aspect) return aspectText(d.aspect);
+  if (a && b) return withAspect(f.atLeast(`${nd(a, L)} × ${nd(b, L)} px`));
+  if (c && e) return f.atMost(`${nd(c, L)} × ${nd(e, L)} px`);
+  if (d.aspect) return aspectText(d.aspect, L);
   return undefined;
 }
 
-export function kbRange(d: DigitalSpec): string | undefined {
+export function kbRange(d: DigitalSpec, L: Locale = "en"): string | undefined {
+  const f = T(L).fmt;
   const { minKB: lo, maxKB: hi } = d;
-  if (lo !== undefined && hi !== undefined) return `${withCommas(lo)} to ${withCommas(hi)} KB`;
-  if (hi !== undefined) return `up to ${withCommas(hi)} KB`;
-  if (lo !== undefined) return `at least ${withCommas(lo)} KB`;
+  if (lo !== undefined && hi !== undefined) return `${f.between(withCommas(lo, L), withCommas(hi, L))} KB`;
+  if (hi !== undefined) return `${f.upTo(withCommas(hi, L))} KB`;
+  if (lo !== undefined) return `${f.atLeast(withCommas(lo, L))} KB`;
   return undefined;
 }
-export function kbDefinition(d: DigitalSpec): string {
-  if (d.kbBytes === 1000) return "The source counts 1 KB as 1,000 bytes.";
-  if (d.kbBytes === 1024) return "The source counts 1 KB as 1,024 bytes.";
-  return "The source does not say how it counts a KB; we assume 1,024 bytes, the safer reading for a maximum.";
+export function kbDefinition(d: DigitalSpec, L: Locale = "en"): string {
+  const f = T(L).fmt;
+  if (d.kbBytes === 1000) return f.kb1000;
+  if (d.kbBytes === 1024) return f.kb1024;
+  return f.kbUnknown;
 }
 const FORMAT_NAMES: Record<string, string> = {
   "image/jpeg": "JPEG",
@@ -121,71 +147,66 @@ const FORMAT_NAMES: Record<string, string> = {
 };
 export const formatNames = (d: DigitalSpec) =>
   d.formats.map((f) => FORMAT_NAMES[f] ?? f.replace("image/", "").toUpperCase());
-export function listWords(items: string[], joiner = "and"): string {
-  if (items.length <= 1) return items.join("");
-  return `${items.slice(0, -1).join(", ")} ${joiner} ${items[items.length - 1]}`;
+export function listWords(items: string[], joiner: "and" | "or" = "and", L: Locale = "en"): string {
+  return T(L).fmt.list(items, joiner);
 }
 
-const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-export function fmtDate(iso: string): string {
+export function fmtDate(iso: string, L: Locale = "en"): string {
   const [y, m, d] = iso.split("-").map(Number);
   if (!y || !m || !d) return iso;
-  return `${d} ${MONTHS[m - 1]} ${y}`;
+  return nd(T(L).fmt.date(y, m, d), L);
 }
-export function checkedDate(doc: DocumentSpec): string {
+export function checkedDate(doc: DocumentSpec, L: Locale = "en"): string {
   const dates = doc.sources.map((s) => s.checkedAt).sort();
-  return dates.length ? fmtDate(dates[dates.length - 1]) : "";
+  return dates.length ? fmtDate(dates[dates.length - 1], L) : "";
 }
 
 // ------------------------------------------------------------ document data
-/** "US passport" becomes "US passport photo"; names that already end in "photo" stay as they are. */
-export const photoName = (doc: DocumentSpec) =>
-  /\bphoto$/i.test(doc.name) ? doc.name : `${doc.name} photo`;
-export const docPath = (doc: DocumentSpec) => `/${doc.id}-photo/`;
+/** "US passport" becomes "US passport photo" (English); Spanish: "foto de pasaporte de ...". */
+export const photoName = (doc: DocumentSpec, L: Locale = "en") =>
+  T(L).fmt.photoName(localizeDocument(doc, L).name);
+/** Path of a document page in a locale. */
+export const docPath = (doc: DocumentSpec, L: Locale = "en") => withLocale(`/${doc.id}-photo/`, L);
+/** The studio is English-only for now, so every language links to the same URL. */
 export const studioPath = (doc: DocumentSpec) => `/studio/?doc=${doc.id}`;
 export const canMakeAtHome = (doc: DocumentSpec) => doc.diy !== "no";
 
-export function specSummary(doc: DocumentSpec): string {
+export function specSummary(doc: DocumentSpec, L: Locale = "en"): string {
+  const f = T(L).fmt;
   const bits: string[] = [];
-  if (doc.print) bits.push(printSizeShort(doc.print));
+  if (doc.print) bits.push(printSizeShort(doc.print, L));
   const d = doc.digital;
   if (d) {
     if (d.originalOnly) {
-      bits.push("original file");
-      const kb = kbRange(d);
+      bits.push(f.originalFile);
+      const kb = kbRange(d, L);
       if (kb) bits.push(kb);
     } else {
-      const dims = digitalDims(d);
-      const kb = kbRange(d);
-      bits.push([dims, kb].filter(Boolean).join(", ") || "digital upload");
+      const dims = digitalDims(d, L);
+      const kb = kbRange(d, L);
+      bits.push([dims, kb].filter(Boolean).join(", ") || f.digitalUpload);
     }
   }
-  return bits.length ? bits.join("; ") : "no photo to prepare";
+  return bits.length ? bits.join("; ") : f.noPhoto;
 }
 
-export const backgroundColors = (doc: DocumentSpec) =>
-  listWords(doc.background.colors, "or");
+export const backgroundColors = (doc: DocumentSpec, L: Locale = "en") =>
+  listWords(localizeDocument(doc, L).background.colors, "or", L);
 
-export function backgroundSentence(doc: DocumentSpec): string {
-  const colors = doc.background.colors;
-  const named = colors.length
-    ? `The source asks for a ${listWords(colors, "or")} background.`
-    : "The source does not name a background color.";
-  return named;
+export function backgroundSentence(doc: DocumentSpec, L: Locale = "en"): string {
+  const s = T(L).sentence;
+  return doc.background.colors.length ? s.bgNamed(backgroundColors(doc, L)) : s.bgNone;
 }
-export function editingSentence(doc: DocumentSpec): string {
+export function editingSentence(doc: DocumentSpec, L: Locale = "en"): string {
+  const s = T(L).sentence;
   const captured = doc.diy === "no";
   switch (doc.background.edit) {
     case "forbidden":
-      return captured
-        ? "The rules do not allow digital changes to the photo, so the background is the photographer’s or booth’s job to get right."
-        : "The rules do not allow digital changes to the photo, so the background has to be right when the photo is taken. Retake it against a plain wall instead of editing the background. PortraitPass keeps background replacement off by default for this document.";
+      return captured ? s.editForbiddenCaptured : s.editForbiddenHome;
     case "allowed":
-      return "The source allows the background to be edited. Keep it plain and even, and leave your face and hair untouched.";
+      return s.editAllowed;
     default:
-      return captured
-        ? "The source does not say whether the background may be edited."
-        : "The source does not say whether the background may be edited. The safest route is a plain wall at capture. If you replace a background, check the receiving organization’s rules first.";
+      return captured ? s.editUnspecifiedCaptured : s.editUnspecifiedHome;
   }
 }
 /** A background section only makes sense when the source says something, or the photo is yours to take. */
@@ -224,35 +245,28 @@ export function sameSize(doc: DocumentSpec, limit = 6): DocumentSpec[] {
 }
 
 // ---------------------------------------------------------------- copy
-export function introSentence(doc: DocumentSpec): string {
+export function introSentence(doc: DocumentSpec, L: Locale = "en"): string {
+  const s = T(L).sentence;
   const parts: string[] = [];
   const p = doc.print;
   const d = doc.digital;
   if (p) {
-    let s = `The printed ${photoName(doc)} is ${printSize(p)}`;
-    const h = headRange(p);
-    const e = eyeRange(p);
-    if (h) s += `, with the head measuring ${h} from crown to chin`;
-    if (e) s += `${h ? " and" : ", with"} the eye line ${e} up from the bottom edge`;
-    parts.push(`${s}.`);
+    let out = s.introPrint(photoName(doc, L), printSize(p, L));
+    const h = headRange(p, L);
+    const e = eyeRange(p, L);
+    if (h) out += s.introHead(h);
+    if (e) out += h ? s.introEyeAfterHead(e) : s.introEye(e);
+    parts.push(`${out}.`);
   }
   if (d) {
     if (d.originalOnly) {
-      const kb = kbRange(d);
-      parts.push(
-        `For the online upload, keep the original, unedited camera file${kb ? ` (${kb})` : ""} as ${listWords(formatNames(d), "or")}.`,
-      );
+      parts.push(s.introOriginal(kbRange(d, L), listWords(formatNames(d), "or", L)));
     } else {
-      const bits = [digitalDims(d), kbRange(d)].filter(Boolean).join(", ");
-      parts.push(
-        `The digital photo is ${bits || "an upload with no fixed size"}, as ${listWords(formatNames(d), "or")}.`,
-      );
+      const bits = [digitalDims(d, L), kbRange(d, L)].filter(Boolean).join(", ");
+      parts.push(s.introDigital(bits || T(L).fmt.noFixedSize, listWords(formatNames(d), "or", L)));
     }
   }
-  if (!p && !d)
-    parts.push(
-      `There is no photo size for you to prepare for the ${doc.name}; the photo is captured for you.`,
-    );
+  if (!p && !d) parts.push(s.introNone(localizeDocument(doc, L).name));
   return parts.join(" ");
 }
 
@@ -260,66 +274,65 @@ export interface Faq {
   q: string;
   a: string;
 }
-export function documentFaq(doc: DocumentSpec): Faq[] {
+export function documentFaq(doc: DocumentSpec, L: Locale = "en"): Faq[] {
+  const t = T(L);
+  const ld = localizeDocument(doc, L);
+  const photo = photoName(doc, L);
   const faq: Faq[] = [];
   const d = doc.digital;
   const p = doc.print;
   // size
   const sizeParts: string[] = [];
-  if (p) sizeParts.push(`The printed photo is ${printSize(p)}.`);
+  if (p) sizeParts.push(t.faq.sizePrint(printSize(p, L)));
   if (d) {
-    const bits = [d.originalOnly ? "the original file" : digitalDims(d), kbRange(d)].filter(Boolean).join(", ");
-    sizeParts.push(`The digital upload is ${bits}, as ${listWords(formatNames(d), "or")}.`);
+    const bits = [d.originalOnly ? t.fmt.theOriginalFile : digitalDims(d, L), kbRange(d, L)]
+      .filter(Boolean)
+      .join(", ");
+    sizeParts.push(t.faq.sizeDigital(bits, listWords(formatNames(d), "or", L)));
   }
   faq.push({
-    q: `What size is a ${photoName(doc)}?`,
+    q: t.faq.sizeQ(photo),
     a: sizeParts.length
       ? sizeParts.join(" ")
-      : `There is no size to prepare. ${doc.diyNote ?? "The photo is captured for you."}`,
+      : t.faq.sizeNone(ld.diyNote ?? t.faq.sizeNoneDefault),
   });
   // home
   const home =
     doc.diy === "no"
-      ? "No. "
+      ? t.faq.homeNo
       : doc.diy === "digital-only"
-        ? doc.diyNote ? "Yes. " : "Yes, and nothing is printed; you upload a digital photo. "
-        : "Yes. ";
+        ? ld.diyNote
+          ? t.faq.homeYes
+          : t.faq.homeYesDigitalNoNote
+        : t.faq.homeYes;
   faq.push({
-    q: `Can I take a ${photoName(doc)} at home?`,
-    a: `${home}${doc.diyNote ?? (doc.diy === "no" ? "The photo has to be made by the issuing authority or a provider it names." : "The source accepts a photo you prepare yourself.")}`,
+    q: t.faq.homeQ(photo),
+    a: `${home}${ld.diyNote ?? (doc.diy === "no" ? t.faq.homeNoDefault : t.faq.homeYesDefault)}`,
   });
   if (backgroundRelevant(doc))
     faq.push({
-      q: `What background does a ${photoName(doc)} need?`,
-      a: `${backgroundSentence(doc)} ${editingSentence(doc)}`,
+      q: t.faq.bgQ(photo),
+      a: `${backgroundSentence(doc, L)} ${editingSentence(doc, L)}`,
     });
   // KB or head position or top rules
   if (d && (d.minKB !== undefined || d.maxKB !== undefined)) {
-    faq.push({
-      q: `How many KB can a ${photoName(doc)} be?`,
-      a: `The file size limit is ${kbRange(d)}. ${kbDefinition(d)}`,
-    });
+    faq.push({ q: t.faq.kbQ(photo), a: t.faq.kbA(kbRange(d, L)!, kbDefinition(d, L)) });
   } else if (p && (p.headMinMm !== undefined || p.headMaxMm !== undefined)) {
-    faq.push({
-      q: `How big should the head be in a ${photoName(doc)}?`,
-      a: `Measured from the crown to the chin, the head should be ${headRange(p)}${eyeRange(p) ? `, and the eye line ${eyeRange(p)} up from the bottom edge` : ""}.`,
-    });
-  } else if (d && headRatio(d)) {
-    faq.push({
-      q: `How big should the head be in a ${photoName(doc)}?`,
-      a: `The head, from the top of the hair to the chin, should be ${headRatio(d)}.`,
-    });
+    faq.push({ q: t.faq.headQ(photo), a: t.faq.headPrintA(headRange(p, L)!, eyeRange(p, L)) });
+  } else if (d && headRatio(d, L)) {
+    faq.push({ q: t.faq.headQ(photo), a: t.faq.headRatioA(headRatio(d, L)!) });
   } else if (doc.rules.length) {
-    faq.push({
-      q: `What are the main rules for a ${photoName(doc)}?`,
-      a: doc.rules.slice(0, 3).join(" "),
-    });
+    faq.push({ q: t.faq.rulesQ(photo), a: ld.rules.slice(0, 3).join(" ") });
   }
   // sources
   const primary = doc.sources.filter((s) => s.kind === "primary").length;
   faq.push({
-    q: `Where do the ${doc.name} numbers come from?`,
-    a: `From ${primary === doc.sources.length ? "the issuing authority’s own pages" : "the pages listed under Sources"}: ${listWords(doc.sources.map((s) => s.title))}. Last checked ${checkedDate(doc)}.`,
+    q: t.faq.sourcesQ(ld.name),
+    a: t.faq.sourcesA(
+      primary === doc.sources.length,
+      listWords(doc.sources.map((s) => s.title), "and", L),
+      checkedDate(doc, L),
+    ),
   });
   return faq;
 }
@@ -345,32 +358,24 @@ export function fitDescription(clauses: string[], fillers: string[]): string {
   }
   return out;
 }
-export function documentMeta(doc: DocumentSpec) {
-  const short = photoName({ ...doc, name: doc.name.replace(/\s*\([^)]*\)/g, "").trim() });
-  const candidates = [
-    `${photoName(doc)} size and rules — PortraitPass`,
-    `${photoName(doc)} size and rules`,
-    `${short} size and rules — PortraitPass`,
-    `${short} size and rules`,
-    `${short} size`,
-  ];
-  const title = candidates.find((t) => t.length <= 60) ?? candidates[3];
+export function documentMeta(doc: DocumentSpec, L: Locale = "en") {
+  const t = T(L);
+  const ld = localizeDocument(doc, L);
+  const photo = photoName(doc, L);
+  const short = t.fmt.photoName(ld.name.replace(/\s*\([^)]*\)/g, "").trim());
+  const candidates = t.meta.docTitles(photo, short, t.meta.brand);
+  const title = candidates.find((c) => c.length <= 60) ?? candidates[3];
   const p = doc.print;
-  const head = p && compactMm(p.headMinMm, p.headMaxMm);
+  const head = p ? compactMm(p.headMinMm, p.headMaxMm, L) : undefined;
   const hasSpec = !!(p || doc.digital);
-  const home =
-    doc.diy === "no"
-      ? "Not a home photo: see where to go."
-      : "Make it free in your browser.";
+  const home = doc.diy === "no" ? t.meta.docNotHome : t.meta.docHome;
   const description = fitDescription(
     [
-      hasSpec
-        ? `${photoName(doc)}: ${specSummary(doc)}${head ? `, head ${head}` : ""}.`
-        : `${photoName(doc)}: there is no size to prepare.`,
+      hasSpec ? t.meta.docSpec(photo, specSummary(doc, L), head) : t.meta.docNoSize(photo),
       home,
-      `Sources checked ${checkedDate(doc)}.`,
+      t.meta.docChecked(checkedDate(doc, L)),
     ],
-    ["Nothing is uploaded.", "No account or watermark."],
+    t.meta.docFillers,
   );
   return { title, description };
 }

@@ -1,25 +1,31 @@
 import type { ReactElement, ReactNode } from "react";
 import { ArrowRight } from "lucide-react";
 import { DOCUMENTS, type DocumentSpec } from "../../core/documents";
+import { withLocale, type Locale } from "../../i18n";
+import { localizeDocument } from "../../i18n/localize";
+import { strings } from "../../i18n/strings";
 import { DocTable } from "./lists";
 import { Disclaimer, FaqList, PageShell, Section, SpecTable } from "./parts";
 import {
   type Faq,
   checkedDate,
   docPath,
+  fitDescription,
+  fmtDate,
   fmtIn,
   fmtMm,
   kbRange,
   listWords,
   mmToPx,
+  nd,
   printSize,
   printSizeShort,
   sheetRows,
   studioPath,
-  fitDescription,
 } from "./content";
 
 export interface PageDef {
+  /** English path; the localized path is withLocale(path, locale). */
   path: string;
   title: string;
   description: string;
@@ -30,183 +36,171 @@ export interface PageDef {
 
 const nearPrint = (d: DocumentSpec, w: number, h: number, tol = 0.6) =>
   !!d.print && Math.abs(d.print.widthMm - w) < tol && Math.abs(d.print.heightMm - h) < tol;
-const names = (docs: DocumentSpec[], n = 4) =>
-  listWords(docs.slice(0, n).map((d) => d.name)) + (docs.length > n ? ` and ${docs.length - n} more` : "");
+const names = (docs: DocumentSpec[], L: Locale, n = 4) => {
+  const shown = docs.slice(0, n).map((d) => localizeDocument(d, L).name);
+  // With a tail ("and 2 more") the shown names are a plain comma list, so "and" is not used twice.
+  return docs.length > n
+    ? shown.join(", ") + strings(L).fmt.andMore(docs.length - n)
+    : listWords(shown, "and", L);
+};
 function sheetCount(w: number, h: number, paper: "4x6" | "a4" | "letter") {
   const row = sheetRows().find(
     (r) => Math.abs(r.doc.print!.widthMm - w) < 0.6 && Math.abs(r.doc.print!.heightMm - h) < 0.6,
   );
   return row?.counts[paper];
 }
-function StudioCta({ doc, label }: { doc?: DocumentSpec; label?: string }) {
+/** "600 × 600" in the locale's digits. */
+const px = (w: number, h: number, L: Locale) => `${nd(w, L)} × ${nd(h, L)}`;
+function StudioCta({ doc, label, locale }: { doc?: DocumentSpec; label?: string; locale: Locale }) {
   if (!doc) return null;
+  const t = strings(locale);
   return (
     <div className="pg-cta">
-      <a className="primary" href={studioPath(doc)}>
-        {label ?? `Open the studio for the ${doc.name}`} <ArrowRight size={15} />
+      <a className="primary" href={studioPath(doc)} hrefLang={locale === "en" ? undefined : "en"}>
+        {label ?? t.sizes.studioFor(localizeDocument(doc, locale).name)} <ArrowRight size={15} />
       </a>
-      <Disclaimer />
+      {t.doc.studioNote && <p className="pg-note">{t.doc.studioNote}</p>}
+      <Disclaimer locale={locale} />
     </div>
   );
 }
 const homeDocs = (docs: DocumentSpec[]) => docs.filter((d) => d.diy !== "no");
 
 // ------------------------------------------------------------------ 2x2
-function twoByTwo(): PageDef {
+function twoByTwo(L: Locale): PageDef {
+  const S = strings(L).sizes;
+  const t = S.twoByTwo;
+  const link = (p: string) => withLocale(p, L);
   const docs = DOCUMENTS.filter((d) => nearPrint(d, 50.8, 50.8, 1));
   const lead = docs[0];
   const home = homeDocs(docs);
+  const sq = (dpi: number) => px(mmToPx(50.8, dpi), mmToPx(50.8, dpi), L);
   const faq: Faq[] = [
+    { q: t.faqPxQ, a: t.faqPxA(sq(300), sq(600), sq(200)) },
+    { q: t.faqMmQ, a: t.faqMmA },
     {
-      q: "How many pixels is a 2×2 inch photo?",
-      a: `${mmToPx(50.8)} × ${mmToPx(50.8)} pixels at 300 DPI, ${mmToPx(50.8, 600)} × ${mmToPx(50.8, 600)} at 600 DPI and ${mmToPx(50.8, 200)} × ${mmToPx(50.8, 200)} at 200 DPI. A print is defined by its physical size, so the pixel count matters only for uploads.`,
-    },
-    {
-      q: "Is 2×2 inches the same as 51×51 mm?",
-      a: "Almost. Two inches is 50.8 mm, and some forms round it to 51 mm. A sheet printed at actual size will measure 50.8 mm each way, which is what the 2 inch rule means.",
-    },
-    {
-      q: "Which documents use a 2×2 inch photo?",
-      a: docs.length
-        ? `In our dataset: ${names(docs, 6)}.`
-        : "No document in our dataset currently asks for this size.",
+      q: t.faqWhichQ,
+      a: docs.length ? t.faqWhichA(names(docs, L, 6)) : t.faqWhichNone,
     },
   ];
   return {
     path: "/2x2-photo/",
-    title: "2×2 inch photo: size, pixels and documents — PortraitPass",
+    title: t.metaTitle,
     description: fitDescription(
       [
-        `2×2 inch photo: 50.8 mm, ${mmToPx(50.8)} × ${mmToPx(50.8)} px at 300 DPI.`,
-        `${docs.length} documents use it, including ${lead?.name ?? "the US passport"}.`,
-        "Head and eye positions, common mistakes and a free browser tool.",
+        t.metaLead(sq(300)),
+        t.metaDocs(docs.length, lead ? localizeDocument(lead, L).name : t.metaLeadFallback),
+        t.metaTail,
       ],
       [],
     ),
-    crumb: "2×2 inch photo",
+    crumb: t.crumb,
     faq,
     element: (
       <PageShell
+        locale={L}
         id="2x2-photo"
-        eyebrow="Photo size"
-        title="2×2 inch photo: size, pixels and documents"
-        crumbs={[{ href: "/documents/", label: "Documents" }, { label: "2×2 inch photo" }]}
-        lede={`A 2×2 inch photo is 50.8 × 50.8 mm, or ${mmToPx(50.8)} × ${mmToPx(50.8)} pixels at 300 DPI. In our dataset ${docs.length} documents ask for a print this size${docs.length ? `, including ${names(docs, 3)}` : ""}.`}
+        eyebrow={S.eyebrowSize}
+        title={t.title}
+        crumbs={[{ href: link("/documents/"), label: strings(L).index.crumb }, { label: t.crumb }]}
+        lede={t.lede(sq(300), docs.length, docs.length ? names(docs, L, 3) : undefined)}
       >
-        <Section title="The same size in every unit" id="units">
+        <Section title={S.unitsTitle} id="units">
           <SpecTable
-            caption="2×2 inch photo"
+            caption={t.caption}
             rows={[
-              ["Inches", "2 × 2 in"],
-              ["Millimetres", "50.8 × 50.8 mm (often rounded to 51 × 51)"],
-              ["Pixels at 300 DPI", `${mmToPx(50.8)} × ${mmToPx(50.8)} px`],
-              ["Pixels at 600 DPI", `${mmToPx(50.8, 600)} × ${mmToPx(50.8, 600)} px`],
+              [S.inches, t.inRow],
+              [S.millimetres, t.mmRow],
+              [S.px300, `${sq(300)} px`],
+              [S.px600, `${sq(600)} px`],
               ...(sheetCount(50.8, 50.8, "4x6")
-                ? ([["On a 4×6 in sheet", `${sheetCount(50.8, 50.8, "4x6")} photos`]] as [string, ReactNode][])
+                ? ([[S.onSheet, S.photosN(sheetCount(50.8, 50.8, "4x6")!)]] as [string, ReactNode][])
                 : []),
             ]}
           />
         </Section>
-        <Section title="Documents that use a 2×2 inch print" id="documents">
-          <DocTable
-            caption="2×2 inch documents"
-            docs={docs}
-            cols={["head", "eye", "home"]}
-          />
-          <p>
-            Head and eye positions differ by document even when the paper size is the same, so
-            take them from the page for the document you are applying for.
-          </p>
+        <Section title={t.docsTitle} id="documents">
+          <DocTable caption={t.docsCaption} docs={docs} cols={["head", "eye", "home"]} locale={L} />
+          <p>{t.docsNote}</p>
         </Section>
-        <Section title="Common mistakes" id="mistakes">
+        <Section title={S.mistakesTitle} id="mistakes">
           <ul className="pg-rules">
-            <li>Stretching a rectangular photo into a square. Crop instead, so the face keeps its proportions.</li>
-            <li>Treating 2×2 as a pixel size. It is a physical size, so the print has to come out at 2 inches, not merely 600 pixels.</li>
-            <li>Printing with “fit to page” switched on. The print comes out a little too big or too small; measure it with a ruler.</li>
-            <li>Cropping too loosely. The head has to fill a set part of the height, so a small face on a large square is out of range.</li>
+            {t.mistakes.map((m) => (
+              <li key={m}>{m}</li>
+            ))}
           </ul>
         </Section>
-        <StudioCta doc={home[0]} />
-        <Section title="Common questions" id="faq">
+        <StudioCta doc={home[0]} locale={L} />
+        <Section title={S.faqTitle} id="faq">
           <FaqList items={faq} />
         </Section>
-        <p className="fine-print">Figures checked {lead ? checkedDate(lead) : "28 Sep 2026"}.</p>
+        <p className="fine-print">
+          {S.figuresChecked(lead ? checkedDate(lead, L) : fmtDate("2026-09-28", L))}
+        </p>
       </PageShell>
     ),
   };
 }
 
 // ---------------------------------------------------------------- 35x45
-function thirtyFiveByFortyFive(): PageDef {
+function thirtyFiveByFortyFive(L: Locale): PageDef {
+  const S = strings(L).sizes;
+  const t = S.thirtyFive;
+  const link = (p: string) => withLocale(p, L);
   const docs = DOCUMENTS.filter((d) => nearPrint(d, 35, 45));
   const home = homeDocs(docs);
   const countries = new Set(docs.map((d) => d.country)).size;
+  const at = (dpi: number) => px(mmToPx(35, dpi), mmToPx(45, dpi), L);
   const faq: Faq[] = [
-    {
-      q: "How many pixels is a 35×45 mm photo?",
-      a: `${mmToPx(35)} × ${mmToPx(45)} pixels at 300 DPI, and ${mmToPx(35, 600)} × ${mmToPx(45, 600)} at 600 DPI.`,
-    },
-    {
-      q: "Is 35×45 mm the same as 2×2 inches?",
-      a: "No. A 35×45 mm photo is taller than it is wide (1.38 × 1.77 in), while 2×2 inches is square. Stretching one to fit the other distorts the face, so crop to the right shape instead.",
-    },
-    {
-      q: "Do all 35×45 mm documents use the same head size?",
-      a: "No. The paper size is shared but the head range is set per document, for example between 29 and 36 mm depending on the authority. The table on this page shows each one.",
-    },
+    { q: t.faqPxQ, a: t.faqPxA(at(300), at(600)) },
+    { q: t.faqSameQ, a: t.faqSameA },
+    { q: t.faqHeadQ, a: t.faqHeadA },
   ];
   return {
     path: "/35x45-photo/",
-    title: "35×45 mm photo: size, pixels and documents — PortraitPass",
+    title: t.metaTitle,
     description: fitDescription(
-      [
-        `35×45 mm photo: ${mmToPx(35)} × ${mmToPx(45)} px at 300 DPI.`,
-        `${docs.length} documents in ${countries} countries use it, with each head range and background rule.`,
-        "Free, in your browser.",
-      ],
+      [t.metaLead(at(300)), t.metaDocs(docs.length, countries), t.metaTail],
       [],
     ),
-    crumb: "35×45 mm photo",
+    crumb: t.crumb,
     faq,
     element: (
       <PageShell
+        locale={L}
         id="35x45-photo"
-        eyebrow="Photo size"
-        title="35×45 mm photo: size, pixels and documents"
-        crumbs={[{ href: "/documents/", label: "Documents" }, { label: "35×45 mm photo" }]}
-        lede={`35×45 mm is the most common passport photo size outside the United States: 1.38 × 1.77 in, or ${mmToPx(35)} × ${mmToPx(45)} pixels at 300 DPI. ${docs.length} documents in our dataset use it.`}
+        eyebrow={S.eyebrowSize}
+        title={t.title}
+        crumbs={[{ href: link("/documents/"), label: strings(L).index.crumb }, { label: t.crumb }]}
+        lede={t.lede(at(300), docs.length)}
       >
-        <Section title="The same size in every unit" id="units">
+        <Section title={S.unitsTitle} id="units">
           <SpecTable
-            caption="35×45 mm photo"
+            caption={t.caption}
             rows={[
-              ["Millimetres", "35 × 45 mm"],
-              ["Inches", `${fmtIn(35)} × ${fmtIn(45)} in`],
-              ["Pixels at 300 DPI", `${mmToPx(35)} × ${mmToPx(45)} px`],
-              ["Pixels at 600 DPI", `${mmToPx(35, 600)} × ${mmToPx(45, 600)} px`],
+              [S.millimetres, t.mmRow],
+              [S.inches, `${fmtIn(35, L)} × ${fmtIn(45, L)} in`],
+              [S.px300, `${at(300)} px`],
+              [S.px600, `${at(600)} px`],
               ...(sheetCount(35, 45, "4x6")
-                ? ([["On a 4×6 in sheet", `${sheetCount(35, 45, "4x6")} photos`]] as [string, ReactNode][])
+                ? ([[S.onSheet, S.photosN(sheetCount(35, 45, "4x6")!)]] as [string, ReactNode][])
                 : []),
             ]}
           />
         </Section>
-        <Section title="Documents that use 35×45 mm" id="documents">
-          <DocTable caption="35×45 mm documents" docs={docs} cols={["head", "bg", "home"]} />
-          <p>
-            The shape is shared but the rules are not. Head height, background color and whether
-            a home photo is accepted at all vary by document, so open the page for yours.
-          </p>
+        <Section title={t.docsTitle} id="documents">
+          <DocTable caption={t.docsCaption} docs={docs} cols={["head", "bg", "home"]} locale={L} />
+          <p>{t.docsNote}</p>
         </Section>
-        <Section title="Common mistakes" id="mistakes">
+        <Section title={S.mistakesTitle} id="mistakes">
           <ul className="pg-rules">
-            <li>Stretching a 4:3 or square photo to 35×45. Crop to the 7:9 shape and keep the face proportions.</li>
-            <li>Printing a 35×45 file at the wrong physical size. Print at actual size and measure the result.</li>
-            <li>Using the head size from another country. The table above shows how the ranges differ.</li>
-            <li>Sending a home print where the document needs a photographer or booth. Those documents are marked “Not at home”.</li>
+            {t.mistakes.map((m) => (
+              <li key={m}>{m}</li>
+            ))}
           </ul>
         </Section>
-        <StudioCta doc={home[0]} />
-        <Section title="Common questions" id="faq">
+        <StudioCta doc={home[0]} locale={L} />
+        <Section title={S.faqTitle} id="faq">
           <FaqList items={faq} />
         </Section>
       </PageShell>
@@ -232,83 +226,79 @@ function accepts600(d: DocumentSpec) {
     (x.aspect === undefined || Math.abs(x.aspect - 1) < 0.01)
   );
 }
-function sixHundred(): PageDef {
+function sixHundred(L: Locale): PageDef {
+  const S = strings(L).sizes;
+  const t = S.sixHundred;
+  const link = (p: string) => withLocale(p, L);
   const exact = DOCUMENTS.filter(exact600);
   const range = DOCUMENTS.filter(accepts600);
   const all = [...exact, ...range];
+  const withKb = all.filter((d) => d.digital && kbRange(d.digital, L));
   const faq: Faq[] = [
+    { q: t.faqSameQ, a: t.faqSameA },
     {
-      q: "Is a 600×600 pixel photo the same as 2×2 inches?",
-      a: "Only at 300 DPI. Two inches at 300 pixels per inch is 600 pixels, which is why the sizes are often mentioned together. For an upload the pixel count is what counts; for a print the physical size is.",
+      q: t.faqWhichQ,
+      a: exact.length ? t.faqWhichA(names(exact, L)) : t.faqWhichNone,
     },
     {
-      q: "Which documents ask for exactly 600×600 pixels?",
-      a: exact.length
-        ? `In our dataset: ${names(exact)}.`
-        : "No document in our dataset asks for exactly this size at the moment.",
-    },
-    {
-      q: "What file size goes with 600×600 pixels?",
-      a: all.some((d) => d.digital && kbRange(d.digital))
-        ? `It depends on the document: ${all
-            .filter((d) => d.digital && kbRange(d.digital))
-            .slice(0, 4)
-            .map((d) => `${d.name} is ${kbRange(d.digital!)}`)
-            .join("; ")}. The table on this page lists each one.`
-        : "The sources for these documents do not state a file size limit.",
+      q: t.faqKbQ,
+      a: all.some((d) => d.digital && kbRange(d.digital, L))
+        ? t.faqKbA(
+            withKb
+              .slice(0, 4)
+              .map((d) => t.faqKbItem(localizeDocument(d, L).name, kbRange(d.digital!, L)!))
+              .join(t.itemJoin),
+          )
+        : t.faqKbNone,
     },
   ];
+  const e0 = exact[0];
+  const dg = e0?.digital;
   return {
     path: "/600x600-photo/",
-    title: "600×600 pixel photo: uploads and size limits — PortraitPass",
+    title: t.metaTitle,
     description: fitDescription(
-      [
-        `600×600 pixel photo: ${exact.length} documents ask for exactly this size, ${range.length} accept it within a range.`,
-        "File size limits, head position and a free browser tool.",
-      ],
-      ["Nothing is uploaded."],
+      [t.metaLead(exact.length, range.length), t.metaTail],
+      [t.metaFiller],
     ),
-    crumb: "600×600 pixel photo",
+    crumb: t.crumb,
     faq,
     element: (
       <PageShell
+        locale={L}
         id="600x600-photo"
-        eyebrow="Photo size"
-        title="600×600 pixel photo: uploads and size limits"
-        crumbs={[{ href: "/documents/", label: "Documents" }, { label: "600×600 pixel photo" }]}
-        lede={`A 600×600 pixel square is the upload size for the US Diversity Visa lottery and fits inside several other limits. ${exact.length} documents in our dataset ask for exactly 600×600 and ${range.length} accept it within a range.`}
+        eyebrow={S.eyebrowSize}
+        title={t.title}
+        crumbs={[{ href: link("/documents/"), label: strings(L).index.crumb }, { label: t.crumb }]}
+        lede={t.lede(exact.length, range.length)}
       >
-        <Section title="What 600×600 means" id="meaning">
-          <p>
-            It is a pixel size, not a print size. At 300 pixels per inch it is 2×2 inches, but an
-            upload form only checks the pixels and the file size. The photo should be a square
-            crop with the head inside the range the document sets.
-          </p>
-          {exact[0]?.digital && (exact[0].digital.headRatioMin ?? 0) > 0 && (
+        <Section title={t.meaningTitle} id="meaning">
+          <p>{t.meaningBody}</p>
+          {dg && (dg.headRatioMin ?? 0) > 0 && (
             <p>
-              For {exact[0].name}, the head is {Math.round((exact[0].digital.headRatioMin ?? 0) * 600)} to{" "}
-              {Math.round((exact[0].digital.headRatioMax ?? 0) * 600)} pixels tall in a 600 pixel frame, and
-              the eye line {Math.round((exact[0].digital.eyeRatioMin ?? 0) * 600)} to{" "}
-              {Math.round((exact[0].digital.eyeRatioMax ?? 0) * 600)} pixels up from the bottom.
+              {t.meaningHead(
+                localizeDocument(e0, L).name,
+                Math.round((dg.headRatioMin ?? 0) * 600),
+                Math.round((dg.headRatioMax ?? 0) * 600),
+                Math.round((dg.eyeRatioMin ?? 0) * 600),
+                Math.round((dg.eyeRatioMax ?? 0) * 600),
+              )}
             </p>
           )}
         </Section>
         {exact.length > 0 && (
-          <Section title="Documents that ask for exactly 600×600" id="exact">
-            <DocTable caption="Exactly 600×600 px" docs={exact} cols={["digital", "kb", "home"]} />
+          <Section title={t.exactTitle} id="exact">
+            <DocTable caption={t.exactCaption} docs={exact} cols={["digital", "kb", "home"]} locale={L} />
           </Section>
         )}
         {range.length > 0 && (
-          <Section title="Documents that accept 600×600 within a range" id="range">
-            <DocTable caption="Range includes 600×600 px" docs={range} cols={["digital", "kb", "home"]} />
-            <p>
-              For these the exact size is your choice inside the range. A square crop of at least
-              600 pixels is a safe pick where the range allows it.
-            </p>
+          <Section title={t.rangeTitle} id="range">
+            <DocTable caption={t.rangeCaption} docs={range} cols={["digital", "kb", "home"]} locale={L} />
+            <p>{t.rangeNote}</p>
           </Section>
         )}
-        <StudioCta doc={exact.find((d) => d.diy !== "no") ?? range[0]} />
-        <Section title="Common questions" id="faq">
+        <StudioCta doc={exact.find((d) => d.diy !== "no") ?? range[0]} locale={L} />
+        <Section title={S.faqTitle} id="faq">
           <FaqList items={faq} />
         </Section>
       </PageShell>
@@ -317,7 +307,10 @@ function sixHundred(): PageDef {
 }
 
 // ----------------------------------------------------------- under 50 KB
-function under50(): PageDef {
+function under50(L: Locale): PageDef {
+  const S = strings(L).sizes;
+  const t = S.under50;
+  const link = (p: string) => withLocale(p, L);
   const limited = DOCUMENTS.filter((d) => d.digital && (d.digital.maxKB !== undefined || d.digital.minKB !== undefined));
   const withMax = limited
     .filter((d) => d.digital!.maxKB !== undefined)
@@ -325,74 +318,60 @@ function under50(): PageDef {
   const smallest = withMax[0];
   const atOrUnder50 = withMax.filter((d) => d.digital!.maxKB! <= 50);
   const thousand = limited.filter((d) => d.digital!.kbBytes === 1000);
+  const smallestText = smallest
+    ? t.smallestOf(smallest.digital!.maxKB!, localizeDocument(smallest, L).name)
+    : undefined;
   const faq: Faq[] = [
+    { q: t.faqWhichQ, a: t.faqWhichA(limited.length, smallestText ?? t.faqWhichNone) },
     {
-      q: "Which documents have a KB limit?",
-      a: `In our dataset ${limited.length} documents set a file size limit, from ${smallest ? `${smallest.digital!.maxKB} KB (${smallest.name})` : "none"} upward. The table on this page lists each one.`,
+      q: t.faqBytesQ,
+      a: thousand.length ? t.faqBytesA(names(thousand, L)) : t.faqBytesNone,
     },
-    {
-      q: "Is 1 KB 1,000 or 1,024 bytes?",
-      a: thousand.length
-        ? `It depends on the source. ${names(thousand)} count 1,000 bytes; the others count 1,024 or do not say. Near a limit, use the smaller reading.`
-        : "Sources mostly count 1,024 bytes. Near a limit, leave a few percent of room.",
-    },
-    {
-      q: "How do I make a photo smaller without ruining it?",
-      a: "Reduce the pixel dimensions to what the form asks for first, then lower the JPEG quality a little at a time. A plain, evenly lit background also compresses better than a busy one.",
-    },
+    { q: t.faqSmallerQ, a: t.faqSmallerA },
   ];
   return {
     path: "/photo-under-50kb/",
-    title: "Photo under 50 KB: documents with a limit — PortraitPass",
+    title: t.metaTitle,
     description: fitDescription(
-      [
-        `Photo under 50 KB? ${limited.length} documents set a file size limit; the smallest maximum we found is ${smallest ? smallest.digital!.maxKB : "n/a"} KB.`,
-        "How KB is counted and how to reduce file size.",
-      ],
-      ["Free, in your browser."],
+      [t.metaLead(limited.length, smallest ? nd(smallest.digital!.maxKB!, L) : t.metaNone), t.metaTail],
+      [t.metaFiller],
     ),
-    crumb: "Photo under 50 KB",
+    crumb: t.crumb,
     faq,
     element: (
       <PageShell
+        locale={L}
         id="photo-under-50kb"
-        eyebrow="File size"
-        title="Photo under 50 KB: which documents set a limit"
-        crumbs={[{ href: "/documents/", label: "Documents" }, { label: "Photo under 50 KB" }]}
+        eyebrow={S.eyebrowFile}
+        title={t.title}
+        crumbs={[{ href: link("/documents/"), label: strings(L).index.crumb }, { label: t.crumb }]}
         lede={
           atOrUnder50.length
-            ? `${atOrUnder50.length} documents in our dataset cap the photo at 50 KB or less: ${names(atOrUnder50)}.`
-            : `No document in our dataset caps the photo at 50 KB or less. The smallest maximum we found is ${smallest ? `${smallest.digital!.maxKB} KB (${smallest.name})` : "not stated"}. If your form asks for 50 KB, its own limit applies; this page shows what the documents we have read actually require.`
+            ? t.ledeSome(atOrUnder50.length, names(atOrUnder50, L))
+            : t.ledeNone(smallestText ?? t.notStated)
         }
       >
-        <Section title="Documents with a file size limit" id="limits">
+        <Section title={t.limitsTitle} id="limits">
           <DocTable
-            caption="Sorted by the largest file allowed"
+            caption={t.limitsCaption}
             docs={[...withMax, ...limited.filter((d) => d.digital!.maxKB === undefined)]}
             cols={["kb", "digital", "home"]}
+            locale={L}
           />
         </Section>
-        <Section title="How KB is counted" id="counting">
-          <p>
-            A kilobyte is 1,000 bytes to some sources and 1,024 to others, and a few do not say.
-            {thousand.length > 0 && ` ${names(thousand)} count 1,000 bytes.`} When a file is
-            close to a maximum, aim a few percent under it rather than exactly on it.
-          </p>
+        <Section title={t.countingTitle} id="counting">
+          <p>{t.countingBody(thousand.length > 0 ? names(thousand, L) : undefined)}</p>
         </Section>
-        <Section title="Getting a photo under a limit" id="how">
+        <Section title={t.howTitle} id="how">
           <ol className="pg-steps">
-            <li>Crop to the shape the document asks for first, with the head in the right range.</li>
-            <li>Set the pixel size to what the form asks for. A 4000×3000 phone photo is about 12 million pixels; a 600×600 upload is 0.36 million.</li>
-            <li>Save as JPEG and lower the quality a step at a time until the file is under the limit.</li>
-            <li>Check the result at full size. If the face looks blocky, choose a larger size limit or a smaller pixel size, not both.</li>
+            {t.steps.map((s) => (
+              <li key={s}>{s}</li>
+            ))}
           </ol>
-          <p>
-            Choose a document in the studio and the digital export does these steps to that
-            document’s limits and shows the final size before you download.
-          </p>
+          <p>{t.howAfter}</p>
         </Section>
-        <StudioCta doc={withMax.find((d) => d.diy !== "no")} label="Open the studio" />
-        <Section title="Common questions" id="faq">
+        <StudioCta doc={withMax.find((d) => d.diy !== "no")} label={t.studioLabel} locale={L} />
+        <Section title={S.faqTitle} id="faq">
           <FaqList items={faq} />
         </Section>
       </PageShell>
@@ -401,89 +380,86 @@ function under50(): PageDef {
 }
 
 // ---------------------------------------------------------- print sheet
-function printSheet(): PageDef {
+function printSheet(L: Locale): PageDef {
+  const S = strings(L).sizes;
+  const t = S.sheet;
+  const link = (p: string) => withLocale(p, L);
   const rows = sheetRows();
   const us = DOCUMENTS.find((d) => d.id === "us-passport");
   const first = rows[0];
   const faq: Faq[] = [
     {
-      q: "How many passport photos fit on a 4×6 print?",
+      q: t.faqCountQ,
       a: rows.length
-        ? `${rows.map((r) => `${r.counts["4x6"]} at ${printSizeShort(r.doc.print!)}`).slice(0, 3).join(", ")}. The table on this page has every size we know.`
-        : "It depends on the photo size.",
+        ? t.faqCountA(
+            rows
+              .map((r) => t.faqCountItem(r.counts["4x6"], printSizeShort(r.doc.print!, L)))
+              .slice(0, 3)
+              .join(", "),
+          )
+        : t.faqCountNone,
     },
-    {
-      q: "Why are there lines between the photos?",
-      a: "On a 4×6 sheet the photos tile edge to edge with thin guides on the shared edges, so you cut along them. On A4 and Letter each photo has corner cut marks and a margin for home printers.",
-    },
-    {
-      q: "What print setting keeps the size exact?",
-      a: "Actual size or 100 percent, with fit to page and borderless scaling off. Measure one photo with a ruler afterwards.",
-    },
+    { q: t.faqLinesQ, a: t.faqLinesA },
+    { q: t.faqSettingQ, a: t.faqSettingA },
   ];
   return {
     path: "/passport-photo-print-sheet/",
-    title: "Passport photo print sheet: 4×6, A4 or Letter — PortraitPass",
-    description: fitDescription(
-      [
-        "Passport photo sheet: how many photos fit on 4×6, A4 and Letter paper, with cut marks.",
-        "Print at actual size. Free, in your browser.",
-      ],
-      ["Nothing is uploaded."],
-    ),
-    crumb: "Print sheet",
+    title: t.metaTitle,
+    description: fitDescription([t.metaLead, t.metaTail], [t.metaFiller]),
+    crumb: t.crumb,
     faq,
     element: (
       <PageShell
+        locale={L}
         id="passport-photo-print-sheet"
-        eyebrow="Print sheet"
-        title="Passport photos on a 4×6 print sheet"
-        crumbs={[{ href: "/print-passport-photos/", label: "Printing" }, { label: "Print sheet" }]}
-        lede={`A 4×6 inch sheet holds ${first?.counts["4x6"] ?? 6} photos of ${first ? printSizeShort(first.doc.print!) : "the usual size"}. The studio lays them out at exact physical size, in a PDF or JPG you can send to a photo counter or print yourself.`}
+        eyebrow={S.eyebrowSheet}
+        title={t.title}
+        crumbs={[{ href: link("/print-passport-photos/"), label: t.crumbPrinting }, { label: t.crumb }]}
+        lede={t.lede(
+          first?.counts["4x6"] ?? 6,
+          first ? printSizeShort(first.doc.print!, L) : t.ledeSizeFallback,
+        )}
       >
-        <Section title="Photos per sheet" id="counts">
+        <Section title={t.countsTitle} id="counts">
           <div className="pg-table-wrap">
             <table className="pg-table pg-list">
-              <caption>Photos on one sheet, at 300 DPI</caption>
+              <caption>{t.countsCaption}</caption>
               <thead>
                 <tr>
-                  <th scope="col">Photo size</th>
-                  <th scope="col">4×6 in</th>
-                  <th scope="col">A4</th>
-                  <th scope="col">US Letter</th>
+                  <th scope="col">{t.colSize}</th>
+                  <th scope="col">{t.col4x6}</th>
+                  <th scope="col">{t.colA4}</th>
+                  <th scope="col">{t.colLetter}</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.size}>
-                    <th scope="row">{r.size}</th>
-                    <td>{r.counts["4x6"]}</td>
-                    <td>{r.counts["a4"]}</td>
-                    <td>{r.counts["letter"]}</td>
+                    <th scope="row">{printSize(r.doc.print!, L)}</th>
+                    <td>{nd(r.counts["4x6"], L)}</td>
+                    <td>{nd(r.counts["a4"], L)}</td>
+                    <td>{nd(r.counts["letter"], L)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          <p>
-            The counts come from the same layout the studio uses, with print margins on A4 and
-            Letter. The paper is turned to whichever direction holds more photos.
-          </p>
+          <p>{t.countsNote}</p>
         </Section>
-        <Section title="Printing it right" id="printing">
+        <Section title={t.printingTitle} id="printing">
           <ol className="pg-steps">
-            <li>Export the sheet from the studio as PDF or JPG.</li>
-            <li>Print at actual size or 100 percent. Turn off “fit to page” and any borderless scaling.</li>
-            <li>Measure one photo with a ruler against the size on the document’s page.</li>
-            <li>Cut along the guides. On 4×6 they sit on the shared edges; on A4 and Letter they are corner marks.</li>
+            {t.steps.map((s) => (
+              <li key={s}>{s}</li>
+            ))}
           </ol>
           <p>
-            For photo counter prices, paper and the documents with special print rules, see the{" "}
-            <a href="/print-passport-photos/">printing guide</a>.
+            {t.seeGuideBefore}
+            <a href={link("/print-passport-photos/")}>{t.seeGuideLink}</a>
+            {t.seeGuideAfter}
           </p>
         </Section>
-        <StudioCta doc={us} label="Open the studio and make a sheet" />
-        <Section title="Common questions" id="faq">
+        <StudioCta doc={us} label={t.studioLabel} locale={L} />
+        <Section title={S.faqTitle} id="faq">
           <FaqList items={faq} />
         </Section>
       </PageShell>
@@ -492,128 +468,116 @@ function printSheet(): PageDef {
 }
 
 // ---------------------------------------------------------- print guide
-function printGuide(): PageDef {
+function printGuide(L: Locale): PageDef {
+  const S = strings(L).sizes;
+  const t = S.guide;
+  const link = (p: string) => withLocale(p, L);
   const withPaper = DOCUMENTS.filter((d) => d.print?.paper);
   const au = DOCUMENTS.find((d) => d.id === "au-passport");
   const uk = DOCUMENTS.find((d) => d.id === "uk-passport");
+  const lau = au && localizeDocument(au, L);
+  const luk = uk && localizeDocument(uk, L);
   const usSix = sheetCount(50.8, 50.8, "4x6") ?? 6;
   const faq: Faq[] = [
-    {
-      q: "How much does it cost to print passport photos?",
-      a: "A 4×6 print at a US drugstore or big-box photo counter is typically around 40 cents, and one sheet holds several photos. Prices vary by store, so check before you order.",
-    },
-    {
-      q: "Can I print passport photos at home?",
-      a: "Sometimes. Some documents accept a home print on photo paper and some require a lab or professional print. Australia asks for a dye-sublimation print of at least 200 gsm, so a home inkjet print does not qualify.",
-    },
-    {
-      q: "What should I choose when the photo counter asks about cropping?",
-      a: "Choose no borders or do not crop if offered, and print at actual size. A shop that auto-crops or scales the sheet changes the photo size.",
-    },
+    { q: t.faqCostQ, a: t.faqCostA },
+    { q: t.faqHomeQ, a: t.faqHomeA },
+    { q: t.faqCropQ, a: t.faqCropA },
   ];
   return {
     path: "/print-passport-photos/",
-    title: "Print passport photos: 4×6, home or lab — PortraitPass",
-    description: fitDescription(
-      [
-        "Print passport photos for about 40¢: a 4×6 sheet at a photo counter, at home, or at a lab.",
-        "Actual-size settings and per-document print rules.",
-      ],
-      ["Free, in your browser."],
-    ),
-    crumb: "Printing",
+    title: t.metaTitle,
+    description: fitDescription([t.metaLead, t.metaTail], [t.metaFiller]),
+    crumb: t.crumb,
     faq,
     element: (
       <PageShell
+        locale={L}
         id="print-passport-photos"
-        eyebrow="Printing"
-        title="Print passport photos for about 40¢"
-        crumbs={[{ label: "Printing" }]}
-        lede={`Export a 4×6 sheet with ${usSix} photos and order it as an ordinary 4×6 print at a photo counter. A US drugstore or big-box counter typically charges around 40 cents for one; prices vary, so check before you order.`}
+        eyebrow={S.eyebrowPrinting}
+        title={t.title}
+        crumbs={[{ label: t.crumb }]}
+        lede={t.lede(usSix)}
       >
-        <Section title="At a photo counter" id="counter">
+        <Section title={t.counterTitle} id="counter">
           <ol className="pg-steps">
-            <li>Export the 4×6 sheet from the studio as a JPG.</li>
-            <li>Upload it for pickup at CVS, Walgreens, Walmart Photo or a similar counter and choose a 4×6 print.</li>
-            <li>Choose “no borders” or “do not crop” if offered. The print must be at actual size.</li>
-            <li>Measure one photo with a ruler before you leave, then cut along the guides.</li>
+            {t.counterSteps.map((s) => (
+              <li key={s}>{s}</li>
+            ))}
           </ol>
+          <p>{t.counterNote}</p>
+        </Section>
+        <Section title={t.homeTitle} id="home">
           <p>
-            The counter sees only the sheet you upload. PortraitPass never receives it.
+            {t.homeBefore}
+            <a href={link("/passport-photo-print-sheet/")}>{t.homeLink}</a>
+            {t.homeAfter}
           </p>
         </Section>
-        <Section title="At home" id="home">
-          <p>
-            Use photo paper, print at actual size or 100 percent, and turn off “fit to page”.
-            A4 and Letter sheets have corner
-            cut marks and a margin for home printers. See the{" "}
-            <a href="/passport-photo-print-sheet/">print sheet page</a> for how many photos fit.
-          </p>
-        </Section>
-        <Section title="Documents with special print rules" id="rules">
-          {au && (
+        <Section title={t.rulesTitle} id="rules">
+          {lau && (
             <>
-              <h3>Australia</h3>
-              <p>
-                {au.diyNote} The paper the source names: {au.print?.paper}. Take the sheet to a photo
-                lab that offers this, rather than a home or drugstore inkjet print.
-              </p>
+              <h3>{t.auHeading}</h3>
+              <p>{t.auBody(lau.diyNote ?? "", lau.print?.paper ?? "")}</p>
             </>
           )}
-          {uk && (
+          {luk && (
             <>
-              <h3>United Kingdom</h3>
+              <h3>{t.ukHeading}</h3>
               <p>
-                {uk.diyNote} Applying online instead? Use the{" "}
-                <a href="/uk-passport-online-photo/">online upload page</a>: it takes the original,
-                uncropped photo, so nothing is printed.
+                {luk.diyNote}
+                {t.ukBefore}
+                <a href={link("/uk-passport-online-photo/")}>{t.ukLink}</a>
+                {t.ukAfter}
               </p>
             </>
           )}
           {withPaper.length > 0 && (
             <div className="pg-table-wrap">
               <table className="pg-table pg-list">
-                <caption>Paper named in the sources</caption>
+                <caption>{strings(L).table.paperCaption}</caption>
                 <thead>
                   <tr>
-                    <th scope="col">Document</th>
-                    <th scope="col">Size</th>
-                    <th scope="col">Paper</th>
+                    <th scope="col">{strings(L).table.document}</th>
+                    <th scope="col">{strings(L).table.paperSize}</th>
+                    <th scope="col">{strings(L).table.paperPaper}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {withPaper.map((d) => (
-                    <tr key={d.id}>
-                      <th scope="row">
-                        <a href={docPath(d)}>{d.name}</a>
-                      </th>
-                      <td>{printSize(d.print!).split(" (")[0]}</td>
-                      <td>{d.print!.paper}</td>
-                    </tr>
-                  ))}
+                  {withPaper.map((d) => {
+                    const ld = localizeDocument(d, L);
+                    return (
+                      <tr key={d.id}>
+                        <th scope="row">
+                          <a href={docPath(d, L)}>{ld.name}</a>
+                        </th>
+                        <td>{printSize(d.print!, L).split(" (")[0]}</td>
+                        <td>{ld.print!.paper}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
-          <p>
-            Some documents cannot be printed at home at all: Canada asks for a commercial
-            photographer and Germany takes the photo digitally at the authority or a certified
-            provider. Their pages explain the route.
-          </p>
+          <p>{t.noHomeNote}</p>
         </Section>
-        <Section title="Common questions" id="faq">
+        <Section title={S.faqTitle} id="faq">
           <FaqList items={faq} />
         </Section>
-        <p className="pg-note">
-          We check sizes and positions; the issuing authority decides acceptance. Prices are typical
-          and change; we do not have a partnership with any retailer named here.
-        </p>
+        <p className="pg-note">{t.closing}</p>
       </PageShell>
     ),
   };
 }
 
-export function sizePages(): PageDef[] {
-  return [twoByTwo(), thirtyFiveByFortyFive(), sixHundred(), under50(), printSheet(), printGuide()];
+export function sizePages(locale: Locale = "en"): PageDef[] {
+  return [
+    twoByTwo(locale),
+    thirtyFiveByFortyFive(locale),
+    sixHundred(locale),
+    under50(locale),
+    printSheet(locale),
+    printGuide(locale),
+  ];
 }
 export { fmtMm };

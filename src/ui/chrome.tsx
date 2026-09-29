@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { Moon, Sun } from "lucide-react";
-import { DISCLAIMER, SUPPORT_URL } from "../config";
+import { SUPPORT_URL } from "../config";
+import { DEFAULT_LOCALE, LOCALES, localeOf, switchTargets, withLocale } from "../i18n";
+import { strings } from "../i18n/strings";
 
 /**
  * The app shell (App.tsx) renders the header and footer once around every route. A page that also
@@ -47,7 +49,8 @@ export function BrandMark() {
   );
 }
 
-function ThemeToggle() {
+function ThemeToggle({ locale }: { locale: ReturnType<typeof localeOf> }) {
+  const t = strings(locale).chrome;
   // Server render and first paint follow the system setting through CSS; the button label
   // catches up once the page is running in the browser.
   const [theme, setTheme] = useState<Theme>("light");
@@ -61,7 +64,7 @@ function ThemeToggle() {
     <button
       className="icon-button"
       aria-label={
-        theme === "dark" ? "Switch to light theme" : "Switch to dark theme"
+        theme === "dark" ? t.themeToLight : t.themeToDark
       }
       onClick={flip}
     >
@@ -70,52 +73,108 @@ function ThemeToggle() {
   );
 }
 
-export function SiteHeader({ force = false }: { force?: boolean } = {}) {
+/** `lang`/`hrefLang` for a link whose text is in the page language but whose target is English-only. */
+const toEnglish = (locale: string) =>
+  locale === DEFAULT_LOCALE ? {} : { hrefLang: LOCALES[DEFAULT_LOCALE].hreflang };
+
+/**
+ * `path` is the page being shown (normalized, e.g. "/es/documents/"); it selects the language of
+ * the chrome and the target of the language switcher.
+ */
+export function SiteHeader({ force = false, path = "/" }: { force?: boolean; path?: string } = {}) {
   if (useContext(ChromeContext) && !force) return null;
+  const locale = localeOf(path);
+  const t = strings(locale).chrome;
+  const other = switchTargets(path).filter((x) => !x.current);
   return (
     <header className="site-header">
       <div className="wrap">
-        <a href="/" className="brand" aria-label="PortraitPass home">
+        <a href="/" className="brand" aria-label={t.homeLabel} {...toEnglish(locale)}>
           <BrandMark />
           <span>
             PortraitPass<span style={{ color: "var(--accent)" }}>.</span>
           </span>
         </a>
-        <nav className="site-nav" aria-label="Main navigation">
-          <a href="/documents/">Documents</a>
-          <a className="nav-extra" href="/print-passport-photos/">
-            Print for 40¢
+        <nav className="site-nav" aria-label={t.mainNav}>
+          <a href={withLocale("/documents/", locale)}>{t.documents}</a>
+          <a className="nav-extra" href={withLocale("/print-passport-photos/", locale)}>
+            {t.printShort}
           </a>
-          <a className="nav-extra" href="/about/">
-            About
+          <a className="nav-extra" href="/about/" {...toEnglish(locale)}>
+            {t.about}
           </a>
-          <a href={SUPPORT_URL}>Support</a>
-          <ThemeToggle />
+          <a href={SUPPORT_URL} {...toEnglish(locale)}>
+            {t.support}
+          </a>
+          {other.map((x) => (
+            <a
+              key={x.locale}
+              className="nav-extra lang-link"
+              href={x.path}
+              lang={LOCALES[x.locale].hreflang}
+              hrefLang={LOCALES[x.locale].hreflang}
+            >
+              {x.name}
+            </a>
+          ))}
+          <ThemeToggle locale={locale} />
         </nav>
       </div>
     </header>
   );
 }
 
-export function SiteFooter({ force = false }: { force?: boolean } = {}) {
+export function SiteFooter({ force = false, path = "/" }: { force?: boolean; path?: string } = {}) {
   if (useContext(ChromeContext) && !force) return null;
+  const locale = localeOf(path);
+  const t = strings(locale).chrome;
+  const en = toEnglish(locale);
   return (
     <footer className="site-footer">
       <div className="wrap">
-        <nav className="footer-links" aria-label="Footer navigation">
-          <a href="/documents/">Documents</a>
-          <a href="/print-passport-photos/">Print guide</a>
-          <a href="/about/">About</a>
-          <a href="/privacy/">Privacy</a>
-          <a href="/terms/">Terms</a>
-          <a href="/accessibility/">Accessibility</a>
-          <a href={SUPPORT_URL}>Support</a>
-          <a href="/llms.txt">For agents</a>
+        <nav className="footer-links" aria-label={t.footerNav}>
+          <a href={withLocale("/documents/", locale)}>{t.documents}</a>
+          <a href={withLocale("/print-passport-photos/", locale)}>{t.printGuide}</a>
+          <a href="/about/" {...en}>
+            {t.about}
+          </a>
+          <a href="/privacy/" {...en}>
+            {t.privacy}
+          </a>
+          <a href="/terms/" {...en}>
+            {t.terms}
+          </a>
+          <a href="/accessibility/" {...en}>
+            {t.accessibility}
+          </a>
+          <a href={SUPPORT_URL} {...en}>
+            {t.support}
+          </a>
+          <a href="/llms.txt" {...en}>
+            {t.forAgents}
+          </a>
         </nav>
-        <p className="footer-legal">
-          {DISCLAIMER} Some authorities, such as Canada and Germany, only accept
-          photos from professional or certified providers.
-        </p>
+        <nav className="footer-links footer-lang" aria-label={t.languageLabel}>
+          <span>{t.languageLabel}:</span>
+          {switchTargets(path).map((x) =>
+            x.current ? (
+              <span key={x.locale} lang={LOCALES[x.locale].hreflang} aria-current="true">
+                {x.name}
+              </span>
+            ) : (
+              <a
+                key={x.locale}
+                href={x.path}
+                lang={LOCALES[x.locale].hreflang}
+                hrefLang={LOCALES[x.locale].hreflang}
+              >
+                {x.name}
+              </a>
+            ),
+          )}
+        </nav>
+        <p className="footer-legal">{t.legal}</p>
+        {t.englishOnlyNote && <p className="footer-legal">{t.englishOnlyNote}</p>}
       </div>
     </footer>
   );

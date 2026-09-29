@@ -67,6 +67,12 @@ export function PrivacyPage() {
         and, only if background replacement is on, the background mask. Treat
         it like the photo itself and share it deliberately.
       </p>
+      <h2>Offline use</h2>
+      <p>
+        The offline feature stores only this site’s own files (pages, scripts,
+        fonts and, if you use face assist, its models) in your browser’s cache.
+        Your photos never go through it, and no data is sent anywhere.
+      </p>
       <h2>Hosting and logs</h2>
       <p>
         The site is hosted on Vercel. Like any web host, Vercel logs request

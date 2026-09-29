@@ -1,20 +1,22 @@
 import { ArrowRight } from "lucide-react";
 import type { DocumentSpec } from "../../core/documents";
 import { DOCUMENTS } from "../../core/documents";
+import { withLocale, type Locale } from "../../i18n";
+import { localizeDocument } from "../../i18n/localize";
+import { strings } from "../../i18n/strings";
 import {
   Disclaimer,
   DocLinks,
   FaqList,
   PageShell,
   Section,
-  Sources,
   SpecTable,
+  Sources,
 } from "./parts";
 import {
-  CHECK_NOTE,
-  RULES_NOTE,
   backgroundRelevant,
   backgroundSentence,
+  checkNote,
   checkedDate,
   digitalDims,
   documentFaq,
@@ -28,194 +30,174 @@ import {
   kbDefinition,
   kbRange,
   listWords,
+  nd,
   photoName,
   printSize,
   related,
+  rulesNote,
   sameSize,
   siblings,
   studioPath,
 } from "./content";
 
-const KIND_LABEL: Record<DocumentSpec["kind"], string> = {
-  passport: "Passport",
-  visa: "Visa",
-  "id-card": "ID card",
-  residence: "Residence or immigration",
-  citizenship: "Citizenship",
-  lottery: "Lottery entry",
-  "exam-form": "Exam application",
-  other: "Application",
-};
-
-function printRows(doc: DocumentSpec): [string, string][] {
+function printRows(doc: DocumentSpec, L: Locale): [string, string][] {
   const p = doc.print;
   if (!p) return [];
-  const rows: [string, string][] = [["Photo size", printSize(p)]];
-  const h = headRange(p);
-  const e = eyeRange(p);
-  if (h) rows.push(["Head, crown to chin", h]);
-  if (e) rows.push(["Eye line, up from the bottom", e]);
-  if (p.copies) rows.push(["Photos required", String(p.copies)]);
-  if (p.paper) rows.push(["Paper", p.paper]);
+  const t = strings(L).doc;
+  const ld = localizeDocument(doc, L);
+  const rows: [string, string][] = [[t.rowPhotoSize, printSize(p, L)]];
+  const h = headRange(p, L);
+  const e = eyeRange(p, L);
+  if (h) rows.push([t.rowHead, h]);
+  if (e) rows.push([t.rowEye, e]);
+  if (p.copies) rows.push([t.rowCopies, nd(p.copies, L)]);
+  if (ld.print?.paper) rows.push([t.rowPaper, ld.print.paper]);
   return rows;
 }
-function digitalRows(doc: DocumentSpec): [string, string][] {
+function digitalRows(doc: DocumentSpec, L: Locale): [string, string][] {
   const d = doc.digital;
   if (!d) return [];
+  const t = strings(L).doc;
   const rows: [string, string][] = [];
-  if (d.originalOnly) rows.push(["Upload", "The original camera file, unedited and uncropped"]);
-  const dims = digitalDims(d);
-  if (dims) rows.push([d.originalOnly ? "Minimum size" : "Image size", dims]);
-  const kb = kbRange(d);
-  if (kb) rows.push(["File size", `${kb}. ${kbDefinition(d)}`]);
-  rows.push(["Formats", listWords(formatNames(d))]);
-  const hr = headRatio(d);
-  const er = eyeRatio(d);
-  if (hr) rows.push(["Head, crown to chin", hr]);
-  if (er) rows.push(["Eye line, up from the bottom", er]);
+  if (d.originalOnly) rows.push([t.rowUpload, t.rowUploadOriginal]);
+  const dims = digitalDims(d, L);
+  if (dims) rows.push([d.originalOnly ? t.rowMinSize : t.rowImageSize, dims]);
+  const kb = kbRange(d, L);
+  if (kb) rows.push([t.rowFileSize, t.fileSizeValue(kb, kbDefinition(d, L))]);
+  rows.push([t.rowFormats, listWords(formatNames(d), "and", L)]);
+  const hr = headRatio(d, L);
+  const er = eyeRatio(d, L);
+  if (hr) rows.push([t.rowHead, hr]);
+  if (er) rows.push([t.rowEye, er]);
   return rows;
 }
 
-function HomeSection({ doc }: { doc: DocumentSpec }) {
+function HomeSection({ doc, locale }: { doc: DocumentSpec; locale: Locale }) {
+  const t = strings(locale).doc;
+  const ld = localizeDocument(doc, locale);
   const others = DOCUMENTS.filter(
     (d) => d.diy !== "no" && d.country === doc.country && d.id !== doc.id,
   ).slice(0, 4);
   if (doc.diy === "no") {
     return (
-      <Section title="Can you make it at home?" id="home">
+      <Section title={t.homeTitle} id="home">
         <p>
-          <strong>No.</strong> {doc.diyNote ?? "The photo has to be made by the issuing authority or a provider it names."}
+          <strong>{t.homeNo}</strong> {ld.diyNote ?? t.homeNoDefault}
         </p>
-        <h3>Where to go instead</h3>
+        <h3>{t.whereInstead}</h3>
         <p>
-          Follow the route in the note above and confirm it on the source pages
-          below before you pay anyone: how photos are captured for this document
-          changes from time to time. PortraitPass does not offer a studio for
-          it, because a photo you print or send yourself would be turned away.
-          {doc.print &&
-            " The size and position figures in the table are listed so you can check the result the photographer or booth gives you, not so you can reproduce it at home."}
+          {t.whereBody}
+          {doc.print && t.whereFigures}
         </p>
         {others.length > 0 && (
           <>
-            <h3>Documents from {doc.country} you can prepare yourself</h3>
-            <DocLinks docs={others} />
+            <h3>{t.othersFrom(ld.country)}</h3>
+            <DocLinks docs={others} locale={locale} />
           </>
         )}
         <p>
-          <a href="/documents/">Browse all documents</a>
+          <a href={withLocale("/documents/", locale)}>{t.browseAll}</a>
         </p>
       </Section>
     );
   }
-  const lead =
-    doc.diy === "digital-only" && !doc.diyNote
-      ? "Yes, and nothing is printed."
-      : "Yes.";
+  const lead = doc.diy === "digital-only" && !doc.diyNote ? t.homeYesDigitalOnly : t.homeYes;
   return (
-    <Section title="Can you make it at home?" id="home">
+    <Section title={t.homeTitle} id="home">
       <p>
-        <strong>{lead}</strong>{" "}
-        {doc.diyNote ?? "The source accepts a photo you prepare yourself."}
+        <strong>{lead}</strong> {ld.diyNote ?? t.homeYesDefault}
       </p>
       <p>
-        {doc.diy === "digital-only"
-          ? "PortraitPass frames the photo against the head and eye lines above, then exports a file at the exact pixel size and under the size limit."
-          : "PortraitPass frames the photo against the head and eye lines above and exports a single photo or a print sheet, with the measurements shown so you can check them yourself."}{" "}
-        Your photo stays in your browser.
+        {doc.diy === "digital-only" ? t.studioBodyDigital : t.studioBodyPrint} {t.stays}
       </p>
       <div className="pg-cta">
-        <a className="primary" href={studioPath(doc)}>
-          Open the studio for this document <ArrowRight size={15} />
+        <a className="primary" href={studioPath(doc)} hrefLang={locale === "en" ? undefined : "en"}>
+          {t.openStudio} <ArrowRight size={15} />
         </a>
-        <Disclaimer />
+        {t.studioNote && <p className="pg-note">{t.studioNote}</p>}
+        <Disclaimer locale={locale} />
       </div>
     </Section>
   );
 }
 
-export function DocumentPage({ doc }: { doc: DocumentSpec }) {
-  const pr = printRows(doc);
-  const dr = digitalRows(doc);
-  const faq = documentFaq(doc);
+export function DocumentPage({ doc, locale = "en" }: { doc: DocumentSpec; locale?: Locale }) {
+  const t = strings(locale).doc;
+  const ld = localizeDocument(doc, locale);
+  const pr = printRows(doc, locale);
+  const dr = digitalRows(doc, locale);
+  const faq = documentFaq(doc, locale);
   const sib = siblings(doc);
   const rel = related(doc).filter((d) => !sib.includes(d));
   const same = sameSize(doc);
   return (
     <PageShell
+      locale={locale}
       id={doc.id}
-      eyebrow={`${doc.country} · ${KIND_LABEL[doc.kind]}`}
-      title={`${photoName(doc)}: size and rules`}
+      eyebrow={t.eyebrow(ld.country, t.kind[doc.kind])}
+      title={t.title(photoName(doc, locale))}
       crumbs={[
-        { href: "/documents/", label: "Documents" },
-        { label: doc.name },
+        { href: withLocale("/documents/", locale), label: strings(locale).index.crumb },
+        { label: ld.name },
       ]}
-      lede={introSentence(doc)}
+      lede={introSentence(doc, locale)}
     >
       {(pr.length > 0 || dr.length > 0) && (
-        <Section title="Photo specification" id="spec">
-          {pr.length > 0 && (
-            <SpecTable caption="Printed photo" rows={pr} />
-          )}
-          {dr.length > 0 && (
-            <SpecTable caption="Digital upload" rows={dr} />
-          )}
+        <Section title={t.specTitle} id="spec">
+          {pr.length > 0 && <SpecTable caption={t.printCaption} rows={pr} />}
+          {dr.length > 0 && <SpecTable caption={t.digitalCaption} rows={dr} />}
           <p className="pg-note">
-            {CHECK_NOTE} Last checked {checkedDate(doc)}. {RULES_NOTE}
+            {t.specNote(checkNote(locale), checkedDate(doc, locale), rulesNote(locale))}
           </p>
         </Section>
       )}
 
       {backgroundRelevant(doc) && (
-        <Section title="Background and editing" id="background">
+        <Section title={t.backgroundTitle} id="background">
           <p>
-            {backgroundSentence(doc)} {editingSentence(doc)}
+            {backgroundSentence(doc, locale)} {editingSentence(doc, locale)}
           </p>
         </Section>
       )}
 
-      <Section title="Rules from the source" id="rules">
+      <Section title={t.rulesTitle} id="rules">
         <ul className="pg-rules">
-          {doc.rules.map((r) => (
+          {ld.rules.map((r) => (
             <li key={r}>{r}</li>
           ))}
         </ul>
-        {doc.diy !== "no" && (
-          <p>
-            Expression, lighting and how recent the photo is cannot be measured from a
-            picture, so check them yourself.
-          </p>
-        )}
+        {doc.diy !== "no" && <p>{t.rulesFooter}</p>}
       </Section>
 
-      <HomeSection doc={doc} />
+      <HomeSection doc={doc} locale={locale} />
 
-      <Section title="Sources" id="sources">
-        <Sources doc={doc} />
-        <p>{RULES_NOTE}</p>
+      <Section title={t.sourcesTitle} id="sources">
+        <Sources doc={doc} locale={locale} />
+        <p>{rulesNote(locale)}</p>
       </Section>
 
-      <Section title="Common questions" id="faq">
+      <Section title={t.faqTitle} id="faq">
         <FaqList items={faq} />
       </Section>
 
       {(sib.length > 0 || rel.length > 0 || same.length > 0) && (
-        <Section title="Related documents" id="related">
+        <Section title={t.relatedTitle} id="related">
           {sib.length > 0 && (
             <>
-              <h3>Same document, other route</h3>
-              <DocLinks docs={sib} />
+              <h3>{t.relSiblings}</h3>
+              <DocLinks docs={sib} locale={locale} />
             </>
           )}
           {rel.length > 0 && (
             <>
-              <h3>More from {doc.country}</h3>
-              <DocLinks docs={rel} />
+              <h3>{t.relCountry(ld.country)}</h3>
+              <DocLinks docs={rel} locale={locale} />
             </>
           )}
           {same.length > 0 && (
             <>
-              <h3>Other documents with a {printSize(doc.print!).split(" (")[0]} print</h3>
-              <DocLinks docs={same} />
+              <h3>{t.relSameSize(printSize(doc.print!, locale).split(" (")[0])}</h3>
+              <DocLinks docs={same} locale={locale} />
             </>
           )}
         </Section>
