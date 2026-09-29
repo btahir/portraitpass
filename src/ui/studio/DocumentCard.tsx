@@ -19,6 +19,15 @@ export function documentRows(
   if (preset.mode === "original") {
     rows.push(["Upload", doc ? (digitalLabel(doc) ?? "Your original file") : "Your original file"]);
     rows.push(["Editing", "None. The file is sent as you took it."]);
+  } else if (doc && !doc.print && doc.digital) {
+    // Digital-only documents have no physical size: show pixels and ratios, not a virtual print frame.
+    const d = doc.digital;
+    rows.push(["Upload", digitalLabel(doc) ?? "Digital file"]);
+    const pct = (v?: number) => (v === undefined ? undefined : `${Math.round(v * 100)}%`);
+    if (d.headRatioMin !== undefined && d.headRatioMax !== undefined)
+      rows.push(["Head", `${pct(d.headRatioMin)}–${pct(d.headRatioMax)} of the image height`]);
+    if (d.eyeRatioMin !== undefined && d.eyeRatioMax !== undefined)
+      rows.push(["Eye line", `${pct(d.eyeRatioMin)}–${pct(d.eyeRatioMax)} up from the bottom`]);
   } else {
     const size = printSizeLabel(preset.widthMm, preset.heightMm);
     rows.push([

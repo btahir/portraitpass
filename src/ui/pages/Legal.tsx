@@ -63,7 +63,7 @@ export function PrivacyPage() {
       <h2>Saved project files</h2>
       <p>
         When you choose Save project, the file is written to your own device. It
-        contains your photo, your settings, the head positions if you set them
+        contains your photo, your settings, the head positions (set by you or found by face detection)
         and, only if background replacement is on, the background mask. Treat
         it like the photo itself and share it deliberately.
       </p>

@@ -255,6 +255,12 @@ p {
 .icon-button:hover {
   background: var(--soft);
 }
+/* Lives here, not in studio.css: that file is a lazy chunk, so the fallback must not depend on it.
+   Tall enough that the footer starts below the fold and does not shift when the studio loads. */
+.studio-loading {
+  min-height: 100vh;
+  min-height: 100svh;
+}
 .site-footer {
   border-top: 1px solid var(--line);
   margin-top: 56px;

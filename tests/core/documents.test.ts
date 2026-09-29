@@ -294,7 +294,7 @@ test("getPreset resolves dataset document ids; legacy presets stay authoritative
   assert.throws(() => getPreset("no-such-document"), { code: "INVALID_PRESET" });
   // Not-DIY documents have no preset, so they never resolve.
   const notDiy = DOCUMENTS.find((d) => d.diy === "no");
-  if (notDiy) assert.throws(() => getPreset(notDiy.id), { code: "INVALID_PRESET" });
+  if (notDiy) assert.throws(() => getPreset(notDiy.id), { code: "NOT_DIY" });
   // us-passport exists in both places; the legacy preset wins, exactly.
   assert.equal(getPreset("us-passport").headMaxMm, 34.925);
   assert.equal(getPreset("us-online").mode, "original");
@@ -337,4 +337,20 @@ test("named document ids (us-visa, dv-lottery, in-oci) validate; unknown ids do 
   }
   const p = createProject({ name: "a.jpg", mime: "image/jpeg", width: 2400, height: 3200 });
   assert.equal(validateProject({ ...p, presetId: "made-up" }).valid, false);
+});
+
+test("every derived digital target stays inside the document's exact, minimum and maximum pixel limits (China visa was 354x515 over a 472 maximum)", () => {
+  for (const d of DOCUMENTS) {
+    const t = documentDigitalTarget(d);
+    if (!t) continue;
+    const g = d.digital!;
+    if (g.widthPx) assert.equal(t.widthPx, g.widthPx, d.id);
+    if (g.heightPx) assert.equal(t.heightPx, g.heightPx, d.id);
+    if (g.minWidthPx) assert.ok(t.widthPx >= g.minWidthPx, `${d.id} width below minimum`);
+    if (g.minHeightPx) assert.ok(t.heightPx >= g.minHeightPx, `${d.id} height below minimum`);
+    if (g.maxWidthPx) assert.ok(t.widthPx <= g.maxWidthPx, `${d.id} width above maximum`);
+    if (g.maxHeightPx) assert.ok(t.heightPx <= g.maxHeightPx, `${d.id} height above maximum`);
+  }
+  const cn = documentDigitalTarget(getDocument("cn-visa")!)!;
+  assert.deepEqual([cn.widthPx, cn.heightPx], [324, 472]);
 });

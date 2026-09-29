@@ -57,6 +57,15 @@ function digitalSize(doc: DocumentSpec): { width: number; height: number } | und
     }
   }
   if (!Number.isFinite(width) || !Number.isFinite(height)) return undefined;
+  // A derived size must stay inside the published maximums (the width was clamped above, the height came from the aspect).
+  if (!d.widthPx || !d.heightPx) {
+    const scale = Math.min(1, (d.maxWidthPx ?? Infinity) / width, (d.maxHeightPx ?? Infinity) / height);
+    if (scale < 1) {
+      const w = Math.round(width * scale);
+      const h = Math.round(height * scale);
+      if (w >= (d.minWidthPx ?? 0) && h >= (d.minHeightPx ?? 0)) return { width: w, height: h };
+    }
+  }
   return { width: Math.round(width), height: Math.round(height) };
 }
 

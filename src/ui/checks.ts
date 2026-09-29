@@ -40,11 +40,11 @@ export function statusWord(check: MeasurementCheck): string {
 
 /** Named rules link text for each document source. */
 export function sourceLabel(preset: Preset): string {
-  if (preset.country === "United States") return "State Dept photo rules";
+  if (preset.country === "United States") return "Photo rules (travel.state.gov)";
   if (preset.country === "United Kingdom")
-    return "HM Passport Office photo rules";
+    return "Photo rules (gov.uk)";
   if (preset.country === "Australia")
-    return "Australian Passport Office photo rules";
+    return "Photo rules (passports.gov.au)";
   return "Photo rules (source)";
 }
 

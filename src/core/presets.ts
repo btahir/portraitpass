@@ -4,7 +4,7 @@ import {
   type Preset,
   type Paper,
 } from "./types.js";
-import { presetForId } from "./catalog.js";
+import { getDocumentById, presetForId } from "./catalog.js";
 const checkedAt = "2026-09-28";
 export const PRESETS: Preset[] = [
   {
@@ -154,8 +154,15 @@ export const PAPERS: Paper[] = [
  */
 export function getPreset(id: string): Preset {
   const item = PRESETS.find((p) => p.id === id) ?? presetForId(id);
-  if (!item)
+  if (!item) {
+    const doc = getDocumentById(id);
+    if (doc?.diy === "no")
+      throw new PortraitError(
+        "NOT_DIY",
+        `${doc.name} photos can't be made at home${doc.diyNote ? `: ${doc.diyNote}` : "."}`,
+      );
     throw new PortraitError("INVALID_PRESET", "Unknown document preset.");
+  }
   return { ...item };
 }
 export function getPaper(id: string): Paper {

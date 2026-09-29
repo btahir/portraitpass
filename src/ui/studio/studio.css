@@ -18,9 +18,6 @@
   text-transform: uppercase;
   color: var(--muted);
 }
-.studio-loading {
-  min-height: 60vh;
-}
 .studio-page {
   width: 100%;
   max-width: 1360px;

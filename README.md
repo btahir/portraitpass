@@ -31,7 +31,7 @@ The website is the product. The command-line tool and MCP server are small extra
 - **Judge everything.** Expression, glasses, head coverings, likeness and recency are yours to check against the source rules.
 - **Replace a photographer where one is required.** Canada's passport photo, for example, must come from a commercial photographer. German passport and ID photos are digital-only through the authority or a certified provider.
 - **Print for you.** Export the sheet and order it at a photo counter.
-- **Cover every document.** 49 documents is a start, not a full list. The interface is English only for now; translated pages are planned.
+- **Cover every document.** 49 documents is a start, not a full list. Document pages are available in English, Spanish, Portuguese, Hindi, Bengali, Urdu and Arabic; the studio itself is in English for now.
 
 ## Privacy
 
@@ -39,7 +39,7 @@ Your photo never leaves your device. Face detection, framing, background checks 
 
 The site is hosted on Vercel, which, like any host, logs request data such as IP addresses. That is separate from your photo, which is never sent. Tips go through Stripe and are handled there.
 
-Photos stay in memory unless you save a project or download an output. A project file contains the photo, settings and the head positions if set, and the background mask only while background replacement is on. The photo keeps its original metadata, and original-file exports preserve the same bytes, so share project files deliberately. Face landmarks and the mask are never saved otherwise.
+Photos stay in memory unless you save a project or download an output. A project file contains the photo, settings and head positions (set by you or found by face detection), and the background mask only while background replacement is on. The photo keeps its original metadata, and original-file exports preserve the same bytes, so share project files deliberately.
 
 Site pages: `/privacy/`, `/terms/` (provided as is, no warranty), `/accessibility/`, `/about/`, `/support/`.
 

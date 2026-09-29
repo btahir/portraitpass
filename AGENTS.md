@@ -11,7 +11,7 @@ The website is the product. The CLI and MCP server are thin extras for AI assist
 - Wording: do not use "compliant", "approved", "guaranteed" or "verified" as claims, and do not use "official" as a claim of status. Citing a source ("source: travel.state.gov") is fine. Say "tips", not "donations". Write plainly; no marketing filler, no emoji.
 - Independence statement, used on every site page and in PDF metadata: "PortraitPass is an independent open-source project, not affiliated with or endorsed by any government or passport office." No government imagery, seals or styling.
 - The face is never edited. Optional background replacement (on-device mask) exists for print and general presets. Where a document's rules forbid alteration (`background.edit: "forbidden"`) it is off by default with a warning, and outputs carry the note "Background replaced with PortraitPass". Digital original modes copy bytes unchanged (no crop, no edits, no print sheet) and never edit.
-- Landmarks (head positions) and the background mask are never saved unless set; the mask is saved only while background replacement is on.
+- Saved projects include head positions when they are known (set by hand or found by face detection); the background mask is saved only while background replacement is on.
 
 ## The document dataset
 
