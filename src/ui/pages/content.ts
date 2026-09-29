@@ -16,6 +16,14 @@ export const checkNote = (L: Locale = "en") => T(L).fmt.checkNote;
 export const rulesNote = (L: Locale = "en") => T(L).fmt.rulesNote;
 
 // ---------------------------------------------------------------- numbers
+/**
+ * Keeps a measurement such as "35 × 45 mm" or "1 3/8" in one left-to-right run. In a right-to-left
+ * paragraph the bidi rules flip the numbers around the "×" (it would read "45 × 35"); a Unicode
+ * isolate stops that. A no-op for left-to-right languages, so English output is unchanged.
+ */
+export const ltr = (text: string, L: Locale = "en") =>
+  LOCALES[L].dir === "rtl" ? `\u2066${text}\u2069` : text;
+
 /** Digits in the locale's own script (a no-op except for locales that set `digits`). */
 export const nd = (n: number | string, L: Locale = "en") => localizeDigits(String(n), L);
 function trim(n: number, dp: number, L: Locale): string {
@@ -37,7 +45,7 @@ export function fmtIn(mm: number, L: Locale = "en"): string {
       num /= 2;
       den /= 2;
     }
-    return nd(whole ? `${whole} ${num}/${den}` : `${num}/${den}`, L);
+    return ltr(nd(whole ? `${whole} ${num}/${den}` : `${num}/${den}`, L), L);
   }
   return trim(x, 2, L);
 }
@@ -52,10 +60,10 @@ export function withCommas(n: number, L: Locale = "en"): string {
 }
 
 export function printSize(p: PrintSpec, L: Locale = "en"): string {
-  return `${fmtMm(p.widthMm, L)} × ${fmtMm(p.heightMm, L)} mm (${fmtIn(p.widthMm, L)} × ${fmtIn(p.heightMm, L)} in)`;
+  return `${printSizeShort(p, L)} ${ltr(`(${fmtIn(p.widthMm, L)} × ${fmtIn(p.heightMm, L)} in)`, L)}`;
 }
 export function printSizeShort(p: PrintSpec, L: Locale = "en"): string {
-  return `${fmtMm(p.widthMm, L)} × ${fmtMm(p.heightMm, L)} mm`;
+  return ltr(`${fmtMm(p.widthMm, L)} × ${fmtMm(p.heightMm, L)} mm`, L);
 }
 function rangeMm(min: number | undefined, max: number | undefined, L: Locale): string | undefined {
   const f = T(L).fmt;
@@ -108,19 +116,19 @@ export function digitalDims(d: DigitalSpec, L: Locale = "en"): string | undefine
   if (d.originalOnly) {
     const bits: string[] = [];
     if (d.minWidthPx && d.minHeightPx)
-      bits.push(f.atLeast(`${nd(d.minWidthPx, L)} × ${nd(d.minHeightPx, L)} px`));
+      bits.push(f.atLeast(ltr(`${nd(d.minWidthPx, L)} × ${nd(d.minHeightPx, L)} px`, L)));
     else if (d.minWidthPx) bits.push(f.atLeastWide(nd(d.minWidthPx, L)));
-    return bits.length ? bits.join(", ") : undefined;
+    return bits.length ? bits.join(f.sep) : undefined;
   }
-  if (d.widthPx && d.heightPx) return `${nd(d.widthPx, L)} × ${nd(d.heightPx, L)} px`;
+  if (d.widthPx && d.heightPx) return ltr(`${nd(d.widthPx, L)} × ${nd(d.heightPx, L)} px`, L);
   const { minWidthPx: a, minHeightPx: b, maxWidthPx: c, maxHeightPx: e } = d;
   const withAspect = (dims: string) => (d.aspect ? f.withAspect(dims, aspectText(d.aspect, L)) : dims);
   if (a && b && c && e) {
     if (a === b && c === e) return f.perSideSquare(nd(a, L), nd(c, L));
     return withAspect(f.fromUpTo(nd(a, L), nd(b, L), nd(c, L), nd(e, L)));
   }
-  if (a && b) return withAspect(f.atLeast(`${nd(a, L)} × ${nd(b, L)} px`));
-  if (c && e) return f.atMost(`${nd(c, L)} × ${nd(e, L)} px`);
+  if (a && b) return withAspect(f.atLeast(ltr(`${nd(a, L)} × ${nd(b, L)} px`, L)));
+  if (c && e) return f.atMost(ltr(`${nd(c, L)} × ${nd(e, L)} px`, L));
   if (d.aspect) return aspectText(d.aspect, L);
   return undefined;
 }
@@ -184,10 +192,10 @@ export function specSummary(doc: DocumentSpec, L: Locale = "en"): string {
     } else {
       const dims = digitalDims(d, L);
       const kb = kbRange(d, L);
-      bits.push([dims, kb].filter(Boolean).join(", ") || f.digitalUpload);
+      bits.push([dims, kb].filter(Boolean).join(f.sep) || f.digitalUpload);
     }
   }
-  return bits.length ? bits.join("; ") : f.noPhoto;
+  return bits.length ? bits.join(f.semi) : f.noPhoto;
 }
 
 export const backgroundColors = (doc: DocumentSpec, L: Locale = "en") =>
@@ -247,23 +255,18 @@ export function sameSize(doc: DocumentSpec, limit = 6): DocumentSpec[] {
 // ---------------------------------------------------------------- copy
 export function introSentence(doc: DocumentSpec, L: Locale = "en"): string {
   const s = T(L).sentence;
+  const f = T(L).fmt;
   const parts: string[] = [];
   const p = doc.print;
   const d = doc.digital;
-  if (p) {
-    let out = s.introPrint(photoName(doc, L), printSize(p, L));
-    const h = headRange(p, L);
-    const e = eyeRange(p, L);
-    if (h) out += s.introHead(h);
-    if (e) out += h ? s.introEyeAfterHead(e) : s.introEye(e);
-    parts.push(`${out}.`);
-  }
+  // Size only: the head and eye ranges are in the table and the diagram next to it.
+  if (p) parts.push(`${s.introPrint(photoName(doc, L), printSize(p, L))}${f.stop}`);
   if (d) {
     if (d.originalOnly) {
       parts.push(s.introOriginal(kbRange(d, L), listWords(formatNames(d), "or", L)));
     } else {
-      const bits = [digitalDims(d, L), kbRange(d, L)].filter(Boolean).join(", ");
-      parts.push(s.introDigital(bits || T(L).fmt.noFixedSize, listWords(formatNames(d), "or", L)));
+      const bits = [digitalDims(d, L), kbRange(d, L)].filter(Boolean).join(f.sep);
+      parts.push(s.introDigital(bits || f.noFixedSize, listWords(formatNames(d), "or", L)));
     }
   }
   if (!p && !d) parts.push(s.introNone(localizeDocument(doc, L).name));
@@ -285,9 +288,8 @@ export function documentFaq(doc: DocumentSpec, L: Locale = "en"): Faq[] {
   const sizeParts: string[] = [];
   if (p) sizeParts.push(t.faq.sizePrint(printSize(p, L)));
   if (d) {
-    const bits = [d.originalOnly ? t.fmt.theOriginalFile : digitalDims(d, L), kbRange(d, L)]
-      .filter(Boolean)
-      .join(", ");
+    // The dimensions only: the file size limit has its own question and the table has the rest.
+    const bits = (d.originalOnly ? t.fmt.theOriginalFile : digitalDims(d, L)) || t.fmt.noFixedSize;
     sizeParts.push(t.faq.sizeDigital(bits, listWords(formatNames(d), "or", L)));
   }
   faq.push({
@@ -307,12 +309,13 @@ export function documentFaq(doc: DocumentSpec, L: Locale = "en"): Faq[] {
         : t.faq.homeYes;
   faq.push({
     q: t.faq.homeQ(photo),
-    a: `${home}${ld.diyNote ?? (doc.diy === "no" ? t.faq.homeNoDefault : t.faq.homeYesDefault)}`,
+    // The document's own note is on the page under "Can you make it at home?"; the answer stays short.
+    a: `${home}${doc.diy === "no" ? t.faq.homeNoDefault : t.faq.homeYesDefault}`,
   });
   if (backgroundRelevant(doc))
     faq.push({
       q: t.faq.bgQ(photo),
-      a: `${backgroundSentence(doc, L)} ${editingSentence(doc, L)}`,
+      a: backgroundSentence(doc, L),
     });
   // KB or head position or top rules
   if (d && (d.minKB !== undefined || d.maxKB !== undefined)) {
@@ -341,8 +344,15 @@ export function documentFaq(doc: DocumentSpec, L: Locale = "en"): Faq[] {
 function trimTo(text: string, max: number): string {
   if (text.length <= max) return text;
   const cut = text.slice(0, max - 1);
-  const at = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf(", "), cut.lastIndexOf(" "));
-  return `${cut.slice(0, at > 60 ? at : max - 1).replace(/[,.;:]$/, "")}…`;
+  const at = Math.max(
+    cut.lastIndexOf(". "),
+    cut.lastIndexOf("। "),
+    cut.lastIndexOf("۔ "),
+    cut.lastIndexOf(", "),
+    cut.lastIndexOf("، "),
+    cut.lastIndexOf(" "),
+  );
+  return `${cut.slice(0, at > 60 ? at : max - 1).replace(/[,.;:،؛।۔]$/, "")}…`;
 }
 /** Fit a set of clauses into 120 to 160 characters. */
 export function fitDescription(clauses: string[], fillers: string[]): string {

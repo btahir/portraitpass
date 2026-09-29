@@ -80,6 +80,10 @@ export const en = {
     /** "US passport" becomes "US passport photo"; a name that already ends in "photo" stays. */
     photoName: (name: string): string => (/\bphoto$/i.test(name) ? name : `${name} photo`),
     andMore: (n: number): string => ` and ${n} more`,
+    /** Separators for lists and sentences built in code: comma, semicolon, full stop. */
+    sep: ", ",
+    semi: "; ",
+    stop: ".",
   },
 
   // ------------------------------------------------------ document sentences
@@ -96,9 +100,6 @@ export const en = {
     editUnspecifiedHome:
       "The source does not say whether the background may be edited. The safest route is a plain wall at capture. If you replace a background, check the receiving organization’s rules first.",
     introPrint: (photo: string, size: string): string => `The printed ${photo} is ${size}`,
-    introHead: (range: string): string => `, with the head measuring ${range} from crown to chin`,
-    introEyeAfterHead: (range: string): string => ` and the eye line ${range} up from the bottom edge`,
-    introEye: (range: string): string => `, with the eye line ${range} up from the bottom edge`,
     introOriginal: (kb: string | undefined, formats: string): string =>
       `For the online upload, keep the original, unedited camera file${kb ? ` (${kb})` : ""} as ${formats}.`,
     introDigital: (bits: string, formats: string): string => `The digital photo is ${bits}, as ${formats}.`,
@@ -214,6 +215,12 @@ export const en = {
     rowFormats: "Formats",
     fileSizeValue: (kb: string, def: string): string => `${kb}. ${def}`,
     specNote: (check: string, date: string, rules: string): string => `${check} Last checked ${date}. ${rules}`,
+    /** Under the figures of a document we do not process: no claim that we check anything. */
+    specNoteNotHome: (date: string, rules: string): string => `Figures from the source. Last checked ${date}. ${rules}`,
+    diagramAlt: (size: string): string => `Photo frame to scale, ${size}, with the head and eye-line ranges marked`,
+    diagramHead: "Head",
+    diagramEye: "Eye line",
+    diagramNote: "Drawn to scale from the figures in the table. The head shape is only a guide.",
     backgroundTitle: "Background and editing",
     rulesTitle: "Rules from the source",
     rulesFooter: "Expression, lighting and how recent the photo is cannot be measured from a picture, so check them yourself.",
@@ -222,9 +229,9 @@ export const en = {
     homeNoDefault: "The photo has to be made by the issuing authority or a provider it names.",
     whereInstead: "Where to go instead",
     whereBody:
-      "Follow the route in the note above and confirm it on the source pages below before you pay anyone: how photos are captured for this document changes from time to time. PortraitPass does not offer a studio for it, because a photo you print or send yourself would be turned away.",
-    whereFigures:
-      " The size and position figures in the table are listed so you can check the result the photographer or booth gives you, not so you can reproduce it at home.",
+      "Ask the issuing office which photographers or booths it takes. PortraitPass does not make this photo, because a print or file made at home would be turned away.",
+    /** Added after whereBody when the page has a figures table. */
+    whereFigures: " Take the numbers above with you, and check the photo you get back against them.",
     othersFrom: (country: string): string => `Documents from ${country} you can prepare yourself`,
     browseAll: "Browse all documents",
     homeYesDigitalOnly: "Yes, and nothing is printed.",
@@ -386,7 +393,6 @@ export const en = {
       faqKbA: (items: string): string => `It depends on the document: ${items}. The table on this page lists each one.`,
       faqKbItem: (name: string, range: string): string => `${name} is ${range}`,
       faqKbNone: "The sources for these documents do not state a file size limit.",
-      itemJoin: "; ",
     },
 
     under50: {

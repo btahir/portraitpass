@@ -89,6 +89,9 @@ export const es: Strings = {
     notAtHome: "No se hace en casa",
     photoName: (name) => `foto de ${lowerFirst(name)}`,
     andMore: (n) => ` y ${n} más`,
+    sep: ", ",
+    semi: "; ",
+    stop: ".",
   },
 
   sentence: {
@@ -104,9 +107,6 @@ export const es: Strings = {
     editUnspecifiedHome:
       "La fuente no indica si se puede editar el fondo. Lo más seguro es usar una pared lisa al hacer la foto. Si sustituyes el fondo, consulta antes las reglas de la organización que va a recibir la foto.",
     introPrint: (photo, size) => `La ${photo} impresa mide ${size}`,
-    introHead: (range) => `, con una cabeza que mide ${range} de la coronilla al mentón`,
-    introEyeAfterHead: (range) => `; la línea de los ojos, medida desde el borde inferior, debe estar ${range}`,
-    introEye: (range) => `; la línea de los ojos, medida desde el borde inferior, debe estar ${range}`,
     introOriginal: (kb, formats) =>
       `Para la subida en línea, usa el archivo original de la cámara, sin editar${kb ? ` (${kb})` : ""}, en ${formats}.`,
     introDigital: (bits, formats) => `La foto digital pide ${bits}, en ${formats}.`,
@@ -222,6 +222,11 @@ export const es: Strings = {
     rowFormats: "Formatos",
     fileSizeValue: (kb, def) => `${kb}. ${def}`,
     specNote: (check, date, rules) => `${check} Última comprobación: ${date}. ${rules}`,
+    specNoteNotHome: (date, rules) => `Cifras de la fuente. Última comprobación: ${date}. ${rules}`,
+    diagramAlt: (size) => `Marco de la foto a escala, ${size}, con los rangos de cabeza y línea de los ojos marcados`,
+    diagramHead: "Cabeza",
+    diagramEye: "Línea de los ojos",
+    diagramNote: "Dibujo a escala con las cifras de la tabla. La forma de la cabeza es solo una guía.",
     backgroundTitle: "Fondo y edición",
     rulesTitle: "Reglas de la fuente",
     rulesFooter:
@@ -231,9 +236,8 @@ export const es: Strings = {
     homeNoDefault: "La foto la tiene que hacer la autoridad emisora o un proveedor que ella indique.",
     whereInstead: "Adónde acudir en su lugar",
     whereBody:
-      "Sigue la vía que indica la nota de arriba y confírmala en las páginas de las fuentes antes de pagarle a nadie: la forma de tomar las fotos para este documento cambia de vez en cuando. PortraitPass no ofrece estudio para este documento, porque una foto que imprimas o envíes tú mismo sería rechazada.",
-    whereFigures:
-      " Las cifras de tamaño y posición de la tabla se incluyen para que puedas comprobar el resultado que te entregue el fotógrafo o la cabina, no para reproducirlo en casa.",
+      "Pregunta a la oficina emisora qué fotógrafos o cabinas acepta. PortraitPass no hace esta foto, porque una impresión o un archivo hechos en casa serían rechazados.",
+    whereFigures: " Lleva contigo las cifras de arriba para comprobar la foto que te entreguen.",
     othersFrom: (country) => `Documentos que puedes preparar tú mismo: ${country}`,
     browseAll: "Ver todos los documentos",
     homeYesDigitalOnly: "Sí, y no se imprime nada.",
@@ -392,7 +396,6 @@ export const es: Strings = {
       faqKbA: (items) => `Depende del documento: ${items}. La tabla de esta página los enumera todos.`,
       faqKbItem: (name, range) => `${name}: ${range}`,
       faqKbNone: "Las fuentes de estos documentos no indican un límite de peso.",
-      itemJoin: "; ",
     },
 
     under50: {

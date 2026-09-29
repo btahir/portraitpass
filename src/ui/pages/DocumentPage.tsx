@@ -1,11 +1,11 @@
-import { ArrowRight } from "lucide-react";
+import { ArrowDown, ArrowRight } from "lucide-react";
 import type { DocumentSpec } from "../../core/documents";
 import { DOCUMENTS } from "../../core/documents";
 import { withLocale, type Locale } from "../../i18n";
 import { localizeDocument } from "../../i18n/localize";
 import { strings } from "../../i18n/strings";
+import { DocDiagram } from "./Diagram";
 import {
-  Disclaimer,
   DocLinks,
   FaqList,
   PageShell,
@@ -16,6 +16,7 @@ import {
 import {
   backgroundRelevant,
   backgroundSentence,
+  canMakeAtHome,
   checkNote,
   checkedDate,
   digitalDims,
@@ -33,6 +34,7 @@ import {
   nd,
   photoName,
   printSize,
+  printSizeShort,
   related,
   rulesNote,
   sameSize,
@@ -87,7 +89,7 @@ function HomeSection({ doc, locale }: { doc: DocumentSpec; locale: Locale }) {
         <h3>{t.whereInstead}</h3>
         <p>
           {t.whereBody}
-          {doc.print && t.whereFigures}
+          {(doc.print || doc.digital) && t.whereFigures}
         </p>
         {others.length > 0 && (
           <>
@@ -107,15 +109,11 @@ function HomeSection({ doc, locale }: { doc: DocumentSpec; locale: Locale }) {
       <p>
         <strong>{lead}</strong> {ld.diyNote ?? t.homeYesDefault}
       </p>
-      <p>
-        {doc.diy === "digital-only" ? t.studioBodyDigital : t.studioBodyPrint} {t.stays}
-      </p>
+      <p>{doc.diy === "digital-only" ? t.studioBodyDigital : t.studioBodyPrint}</p>
       <div className="pg-cta">
         <a className="primary" href={studioPath(doc)} hrefLang={locale === "en" ? undefined : "en"}>
-          {t.openStudio} <ArrowRight size={15} />
+          {t.openStudio} <ArrowRight size={15} className="pg-arrow" aria-hidden="true" />
         </a>
-        {t.studioNote && <p className="pg-note">{t.studioNote}</p>}
-        <Disclaimer locale={locale} />
       </div>
     </Section>
   );
@@ -130,6 +128,9 @@ export function DocumentPage({ doc, locale = "en" }: { doc: DocumentSpec; locale
   const sib = siblings(doc);
   const rel = related(doc).filter((d) => !sib.includes(d));
   const same = sameSize(doc);
+  const atHome = canMakeAtHome(doc);
+  const hasSpec = pr.length > 0 || dr.length > 0;
+  const date = checkedDate(doc, locale);
   return (
     <PageShell
       locale={locale}
@@ -141,13 +142,38 @@ export function DocumentPage({ doc, locale = "en" }: { doc: DocumentSpec; locale
         { label: ld.name },
       ]}
       lede={introSentence(doc, locale)}
+      actions={
+        <div className="pg-actions">
+          {atHome ? (
+            <>
+              <a className="primary" href={studioPath(doc)} hrefLang={locale === "en" ? undefined : "en"}>
+                {t.openStudio} <ArrowRight size={15} className="pg-arrow" aria-hidden="true" />
+              </a>
+              <span className="pg-actions-note">
+                {t.stays}
+                {t.studioNote && ` ${t.studioNote}`}
+              </span>
+            </>
+          ) : (
+            <>
+              <a className="pg-jump" href="#home">
+                {t.whereInstead} <ArrowDown size={15} aria-hidden="true" />
+              </a>
+              <em className="pg-tag">{strings(locale).fmt.notAtHome}</em>
+            </>
+          )}
+        </div>
+      }
+      aside={<DocDiagram doc={doc} locale={locale} />}
     >
-      {(pr.length > 0 || dr.length > 0) && (
+      {hasSpec && (
         <Section title={t.specTitle} id="spec">
           {pr.length > 0 && <SpecTable caption={t.printCaption} rows={pr} />}
           {dr.length > 0 && <SpecTable caption={t.digitalCaption} rows={dr} />}
           <p className="pg-note">
-            {t.specNote(checkNote(locale), checkedDate(doc, locale), rulesNote(locale))}
+            {atHome
+              ? t.specNote(checkNote(locale), date, rulesNote(locale))
+              : t.specNoteNotHome(date, rulesNote(locale))}
           </p>
         </Section>
       )}
@@ -173,7 +199,7 @@ export function DocumentPage({ doc, locale = "en" }: { doc: DocumentSpec; locale
 
       <Section title={t.sourcesTitle} id="sources">
         <Sources doc={doc} locale={locale} />
-        <p>{rulesNote(locale)}</p>
+        {!hasSpec && <p>{rulesNote(locale)}</p>}
       </Section>
 
       <Section title={t.faqTitle} id="faq">
@@ -196,7 +222,7 @@ export function DocumentPage({ doc, locale = "en" }: { doc: DocumentSpec; locale
           )}
           {same.length > 0 && (
             <>
-              <h3>{t.relSameSize(printSize(doc.print!, locale).split(" (")[0])}</h3>
+              <h3>{t.relSameSize(printSizeShort(doc.print!, locale))}</h3>
               <DocLinks docs={same} locale={locale} />
             </>
           )}

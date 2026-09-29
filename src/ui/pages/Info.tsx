@@ -80,7 +80,7 @@ export function SupportPage() {
     >
       <div className="support-main">
         <a className="primary" href={DONATION_LINKS.once} target="_blank" rel="noreferrer">
-          Leave a one-time tip <ArrowRight size={15} />
+          Leave a one-time tip <ArrowRight size={15} className="pg-arrow" aria-hidden="true" />
         </a>
       </div>
       <p>Choose your own amount. Tips are always optional.</p>
@@ -95,7 +95,7 @@ export function SupportPage() {
                 <small style={{ fontSize: 14 }}> / mo</small>
               </strong>
               <span>
-                Tip monthly <ArrowRight size={12} />
+                Tip monthly <ArrowRight size={12} className="pg-arrow" aria-hidden="true" />
               </span>
             </a>
           ))}

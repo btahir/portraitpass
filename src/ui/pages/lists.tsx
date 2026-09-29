@@ -73,7 +73,10 @@ export function DocTable({
             <tr key={d.id}>
               <th scope="row">
                 <a href={docPath(d, locale)}>{localizeDocument(d, locale).name}</a>
-                {!canMakeAtHome(d) && <em className="pg-tag">{strings(locale).fmt.notAtHome}</em>}
+                {/* A column already says "not at home" when the table has one; the tag is for tables without it. */}
+                {!canMakeAtHome(d) && !cols.includes("home") && (
+                  <em className="pg-tag">{strings(locale).fmt.notAtHome}</em>
+                )}
               </th>
               {cols.map((c) => (
                 <td key={c}>{cell(d, c, locale)}</td>

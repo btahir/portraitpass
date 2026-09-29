@@ -81,11 +81,24 @@ test.describe('static pages', () => {
       // studio link only when it can be made at home
       const studio = page.getByRole('link', { name: 'Open the studio for this document' });
       if (doc.diy === 'no') await expect(studio).toHaveCount(0);
-      else await expect(studio).toHaveAttribute('href', `/studio/?doc=${id}`);
+      else {
+        await expect(studio.first()).toHaveAttribute('href', `/studio/?doc=${id}`);
+        // the first one is above the fold, inside the page header
+        await expect(page.locator('header.pg-head').getByRole('link', { name: 'Open the studio for this document' })).toBeVisible();
+        const top = await studio.first().evaluate((el) => el.getBoundingClientRect().top);
+        expect(top).toBeLessThan(600);
+      }
 
-      // disclaimer sits with the numbers
-      if (doc.print || doc.digital)
-        await expect(page.locator('main')).toContainText('We check sizes and positions; the issuing authority decides acceptance.');
+      // the note under the numbers: only a document we process claims that we check it
+      if (doc.print || doc.digital) {
+        if (doc.diy === 'no') {
+          await expect(page.locator('main')).toContainText('Figures from the source. Last checked 28 Sep 2026.');
+          await expect(page.locator('main')).not.toContainText('We check sizes and positions');
+          await expect(page.locator('main')).not.toContainText('note above');
+        } else {
+          await expect(page.locator('main')).toContainText('We check sizes and positions; the issuing authority decides acceptance.');
+        }
+      }
 
       // FAQ and JSON-LD
       const faqs = page.locator('.pg-faq-item');
@@ -105,12 +118,45 @@ test.describe('static pages', () => {
   }
 
   test('a not-DIY page explains where to go instead', async ({ page }) => {
-    await page.goto(docPath('de-passport'));
+    await page.goto(docPath('ca-passport'));
     const main = page.locator('main');
     await expect(main).toContainText('Can you make it at home?');
     await expect(main).toContainText('No.');
     await expect(main).toContainText('Where to go instead');
     await expect(page.getByRole('link', { name: 'Open the studio for this document' })).toHaveCount(0);
+    await expect(main).toContainText('Ask the issuing office which photographers or booths it takes.');
+    await expect(main).not.toContainText('Follow the route in the note above');
+    // above the fold: a way down to where to go instead, and the to-scale diagram
+    await expect(page.locator('header.pg-head a[href="#home"]')).toBeVisible();
+    await expect(page.locator('figure.pg-figure svg')).toBeVisible();
+  });
+
+  test('a document page shows a to-scale diagram with head and eye bands', async ({ page }) => {
+    await page.goto('/us-passport-photo/');
+    const svg = page.locator('figure.pg-figure svg');
+    await expect(svg).toBeVisible();
+    await expect(svg).toHaveAttribute('aria-label', /50\.8 × 50\.8 mm/);
+    await expect(page.locator('figure.pg-figure')).toContainText('25.4 to 34.9 mm');
+    await expect(page.locator('figure.pg-figure')).toContainText('28.6 to 34.9 mm');
+    // one reading column: the spec table, rules and FAQ are the same width
+    const widths = await page.evaluate(() =>
+      ['table.pg-spec', '.pg-rules', '.pg-faq'].map((q) => Math.round(document.querySelector(q)!.getBoundingClientRect().width)),
+    );
+    expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(1);
+  });
+
+  test('the documents index says "not at home" once per document, in the column', async ({ page }) => {
+    await page.goto('/documents/');
+    await expect(page.locator('.pg-country .pg-tag')).toHaveCount(0);
+    await expect(page.locator('section.pg-country').first().locator('h2')).toBeVisible();
+  });
+
+  test('print size cells do not wrap', async ({ page }) => {
+    await page.goto('/print-passport-photos/');
+    const cell = page.locator('td.pg-nowrap').first();
+    await expect(cell).toBeVisible();
+    const h = await cell.evaluate((el) => el.getBoundingClientRect().height);
+    expect(h).toBeLessThan(50);
   });
 
   test('US and UK keyword URLs are the document pages', async ({ page }) => {

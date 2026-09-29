@@ -16,6 +16,7 @@ import {
   fmtMm,
   kbRange,
   listWords,
+  ltr,
   mmToPx,
   nd,
   printSize,
@@ -40,7 +41,7 @@ const names = (docs: DocumentSpec[], L: Locale, n = 4) => {
   const shown = docs.slice(0, n).map((d) => localizeDocument(d, L).name);
   // With a tail ("and 2 more") the shown names are a plain comma list, so "and" is not used twice.
   return docs.length > n
-    ? shown.join(", ") + strings(L).fmt.andMore(docs.length - n)
+    ? shown.join(strings(L).fmt.sep) + strings(L).fmt.andMore(docs.length - n)
     : listWords(shown, "and", L);
 };
 function sheetCount(w: number, h: number, paper: "4x6" | "a4" | "letter") {
@@ -50,14 +51,16 @@ function sheetCount(w: number, h: number, paper: "4x6" | "a4" | "letter") {
   return row?.counts[paper];
 }
 /** "600 × 600" in the locale's digits. */
-const px = (w: number, h: number, L: Locale) => `${nd(w, L)} × ${nd(h, L)}`;
+const px = (w: number, h: number, L: Locale) => ltr(`${nd(w, L)} × ${nd(h, L)}`, L);
+/** The same with its unit inside the left-to-right run: "600 × 600 px". */
+const pxUnit = (w: number, h: number, L: Locale) => ltr(`${nd(w, L)} × ${nd(h, L)} px`, L);
 function StudioCta({ doc, label, locale }: { doc?: DocumentSpec; label?: string; locale: Locale }) {
   if (!doc) return null;
   const t = strings(locale);
   return (
     <div className="pg-cta">
       <a className="primary" href={studioPath(doc)} hrefLang={locale === "en" ? undefined : "en"}>
-        {label ?? t.sizes.studioFor(localizeDocument(doc, locale).name)} <ArrowRight size={15} />
+        {label ?? t.sizes.studioFor(localizeDocument(doc, locale).name)} <ArrowRight size={15} className="pg-arrow" aria-hidden="true" />
       </a>
       {t.doc.studioNote && <p className="pg-note">{t.doc.studioNote}</p>}
       <Disclaimer locale={locale} />
@@ -75,6 +78,7 @@ function twoByTwo(L: Locale): PageDef {
   const lead = docs[0];
   const home = homeDocs(docs);
   const sq = (dpi: number) => px(mmToPx(50.8, dpi), mmToPx(50.8, dpi), L);
+  const sqU = (dpi: number) => pxUnit(mmToPx(50.8, dpi), mmToPx(50.8, dpi), L);
   const faq: Faq[] = [
     { q: t.faqPxQ, a: t.faqPxA(sq(300), sq(600), sq(200)) },
     { q: t.faqMmQ, a: t.faqMmA },
@@ -111,8 +115,8 @@ function twoByTwo(L: Locale): PageDef {
             rows={[
               [S.inches, t.inRow],
               [S.millimetres, t.mmRow],
-              [S.px300, `${sq(300)} px`],
-              [S.px600, `${sq(600)} px`],
+              [S.px300, sqU(300)],
+              [S.px600, sqU(600)],
               ...(sheetCount(50.8, 50.8, "4x6")
                 ? ([[S.onSheet, S.photosN(sheetCount(50.8, 50.8, "4x6")!)]] as [string, ReactNode][])
                 : []),
@@ -151,6 +155,7 @@ function thirtyFiveByFortyFive(L: Locale): PageDef {
   const home = homeDocs(docs);
   const countries = new Set(docs.map((d) => d.country)).size;
   const at = (dpi: number) => px(mmToPx(35, dpi), mmToPx(45, dpi), L);
+  const atU = (dpi: number) => pxUnit(mmToPx(35, dpi), mmToPx(45, dpi), L);
   const faq: Faq[] = [
     { q: t.faqPxQ, a: t.faqPxA(at(300), at(600)) },
     { q: t.faqSameQ, a: t.faqSameA },
@@ -179,9 +184,9 @@ function thirtyFiveByFortyFive(L: Locale): PageDef {
             caption={t.caption}
             rows={[
               [S.millimetres, t.mmRow],
-              [S.inches, `${fmtIn(35, L)} × ${fmtIn(45, L)} in`],
-              [S.px300, `${at(300)} px`],
-              [S.px600, `${at(600)} px`],
+              [S.inches, ltr(`${fmtIn(35, L)} × ${fmtIn(45, L)} in`, L)],
+              [S.px300, atU(300)],
+              [S.px600, atU(600)],
               ...(sheetCount(35, 45, "4x6")
                 ? ([[S.onSheet, S.photosN(sheetCount(35, 45, "4x6")!)]] as [string, ReactNode][])
                 : []),
@@ -247,7 +252,7 @@ function sixHundred(L: Locale): PageDef {
             withKb
               .slice(0, 4)
               .map((d) => t.faqKbItem(localizeDocument(d, L).name, kbRange(d.digital!, L)!))
-              .join(t.itemJoin),
+              .join(strings(L).fmt.semi),
           )
         : t.faqKbNone,
     },
@@ -395,7 +400,7 @@ function printSheet(L: Locale): PageDef {
             rows
               .map((r) => t.faqCountItem(r.counts["4x6"], printSizeShort(r.doc.print!, L)))
               .slice(0, 3)
-              .join(", "),
+              .join(strings(L).fmt.sep),
           )
         : t.faqCountNone,
     },
@@ -422,7 +427,7 @@ function printSheet(L: Locale): PageDef {
       >
         <Section title={t.countsTitle} id="counts">
           <div className="pg-table-wrap">
-            <table className="pg-table pg-list">
+            <table className="pg-table pg-list pg-auto">
               <caption>{t.countsCaption}</caption>
               <thead>
                 <tr>
@@ -435,7 +440,9 @@ function printSheet(L: Locale): PageDef {
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.size}>
-                    <th scope="row">{printSize(r.doc.print!, L)}</th>
+                    <th scope="row" className="pg-nowrap">
+                      {printSize(r.doc.print!, L)}
+                    </th>
                     <td>{nd(r.counts["4x6"], L)}</td>
                     <td>{nd(r.counts["a4"], L)}</td>
                     <td>{nd(r.counts["letter"], L)}</td>
@@ -533,7 +540,7 @@ function printGuide(L: Locale): PageDef {
           )}
           {withPaper.length > 0 && (
             <div className="pg-table-wrap">
-              <table className="pg-table pg-list">
+              <table className="pg-table pg-list pg-auto">
                 <caption>{strings(L).table.paperCaption}</caption>
                 <thead>
                   <tr>
@@ -550,7 +557,7 @@ function printGuide(L: Locale): PageDef {
                         <th scope="row">
                           <a href={docPath(d, L)}>{ld.name}</a>
                         </th>
-                        <td>{printSize(d.print!, L).split(" (")[0]}</td>
+                        <td className="pg-nowrap">{printSizeShort(d.print!, L)}</td>
                         <td>{ld.print!.paper}</td>
                       </tr>
                     );

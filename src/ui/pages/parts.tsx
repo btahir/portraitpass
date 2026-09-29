@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { DocumentSpec } from "../../core/documents";
-import type { Locale } from "../../i18n";
+import { LOCALES, type Locale } from "../../i18n";
 import { localizeDocument } from "../../i18n/localize";
 import { strings } from "../../i18n/strings";
 import {
@@ -19,6 +19,8 @@ export function PageShell({
   eyebrow,
   title,
   lede,
+  actions,
+  aside,
   crumbs,
   children,
   locale = "en",
@@ -27,13 +29,23 @@ export function PageShell({
   eyebrow?: string;
   title: ReactNode;
   lede?: ReactNode;
+  /** Buttons under the lede (the first thing to do on the page). */
+  actions?: ReactNode;
+  /** A figure beside the heading on wide screens, under the actions on narrow ones. */
+  aside?: ReactNode;
   crumbs?: { href?: string; label: string }[];
   children: ReactNode;
   locale?: Locale;
 }) {
   const t = strings(locale).shell;
   return (
-    <main id="main" className="content-page pg" data-pp-page={id}>
+    <main
+      id="main"
+      className="content-page pg"
+      data-pp-page={id}
+      lang={LOCALES[locale].hreflang}
+      dir={LOCALES[locale].dir}
+    >
       {crumbs && (
         <nav className="pg-crumbs" aria-label={t.breadcrumb}>
           <ol>
@@ -50,10 +62,16 @@ export function PageShell({
           </ol>
         </nav>
       )}
-      {eyebrow && <div className="eyebrow pg-eyebrow">{eyebrow}</div>}
-      <h1 className="page-title pg-title">{title}</h1>
-      {lede && <p className="lede pg-lede">{lede}</p>}
-      {children}
+      <header className={`pg-head${aside ? " pg-head-aside" : ""}`}>
+        <div className="pg-head-text">
+          {eyebrow && <div className="eyebrow pg-eyebrow">{eyebrow}</div>}
+          <h1 className="page-title pg-title">{title}</h1>
+          {lede && <p className="lede pg-lede">{lede}</p>}
+          {actions}
+        </div>
+        {aside}
+      </header>
+      <div className="pg-body">{children}</div>
     </main>
   );
 }

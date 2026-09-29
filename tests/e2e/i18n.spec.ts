@@ -9,10 +9,12 @@ const words = (text: string) => text.split(/\s+/).filter(Boolean).length;
 /** What each translated language must show. Add a row when a language is added. */
 // Partial while translators add rows in parallel; the loop below fails for any language without one.
 const EXPECT: Partial<Record<Exclude<Locale, 'en'>, {
-  usH1: string; docsH1: string; faqStart: RegExp; independence: string; switcherName: string; studioNote: string;
+  usH1: string; usName: string; usSize: string; docsH1: string; faqStart: RegExp; independence: string; switcherName: string; studioNote: string;
 }>> = {
   bn: {
     usH1: 'মার্কিন পাসপোর্টের ছবি: মাপ ও নিয়ম',
+    usName: 'মার্কিন পাসপোর্ট',
+    usSize: '50.8 × 50.8 mm (2 × 2 in)',
     docsH1: 'পাসপোর্ট, ভিসা ও পরিচয়পত্রের ছবির নিয়ম',
     faqStart: /\?$/,
     independence: 'কোনো সরকার বা পাসপোর্ট অফিসের সঙ্গে যুক্ত নয়',
@@ -21,6 +23,8 @@ const EXPECT: Partial<Record<Exclude<Locale, 'en'>, {
   },
   hi: {
     usH1: 'अमेरिकी पासपोर्ट फोटो: साइज़ और नियम',
+    usName: 'अमेरिकी पासपोर्ट',
+    usSize: '50.8 × 50.8 mm (2 × 2 in)',
     docsH1: 'पासपोर्ट, वीज़ा और आईडी फोटो के नियम',
     faqStart: /\?$/,
     independence: 'किसी भी सरकार या पासपोर्ट कार्यालय से संबद्ध या समर्थित नहीं',
@@ -29,6 +33,8 @@ const EXPECT: Partial<Record<Exclude<Locale, 'en'>, {
   },
   es: {
     usH1: 'Foto de pasaporte de Estados Unidos: medidas y requisitos',
+    usName: 'Pasaporte de Estados Unidos',
+    usSize: '50,8 × 50,8 mm (2 × 2 in)',
     docsH1: 'Requisitos de fotos para pasaporte, visa y documentos de identidad',
     faqStart: /^¿/,
     independence: 'sin afiliación ni respaldo de ningún gobierno ni oficina de pasaportes',
@@ -37,14 +43,18 @@ const EXPECT: Partial<Record<Exclude<Locale, 'en'>, {
   },
   pt: {
     usH1: 'Foto de passaporte dos Estados Unidos: medidas e requisitos',
+    usName: 'Passaporte dos Estados Unidos',
+    usSize: '50,8 × 50,8 mm (2 × 2 in)',
     docsH1: 'Requisitos de fotos para passaporte, visto e documentos de identidade',
-    faqStart: /^Qual/,
+    faqStart: /\?$/,
     independence: 'sem afiliação nem endosso de nenhum governo ou órgão de passaportes',
     switcherName: 'Português',
     studioNote: 'O estúdio está em inglês por enquanto.',
   },
   ur: {
     usH1: 'امریکی پاسپورٹ کی تصویر: سائز اور قواعد',
+    usName: 'امریکی پاسپورٹ',
+    usSize: '50.8 × 50.8 mm (2 × 2 in)',
     docsH1: 'پاسپورٹ، ویزا اور شناختی تصویر کے تقاضے',
     faqStart: /؟$/,
     independence: 'کسی حکومت یا پاسپورٹ آفس سے کوئی وابستگی نہیں',
@@ -53,6 +63,8 @@ const EXPECT: Partial<Record<Exclude<Locale, 'en'>, {
   },
   ar: {
     usH1: 'صورة جواز سفر الولايات المتحدة: المقاس والشروط',
+    usName: 'جواز سفر الولايات المتحدة',
+    usSize: '50.8 × 50.8 mm (2 × 2 in)',
     docsH1: 'متطلبات صور جوازات السفر والتأشيرات والهويات',
     faqStart: /^(?:ما|كم|هل|كيف|من)/,
     independence: 'غير تابع لأي حكومة أو مكتب جوازات ولا يحظى بتأييده',
@@ -60,6 +72,15 @@ const EXPECT: Partial<Record<Exclude<Locale, 'en'>, {
     studioNote: 'المحرّر متاح بالإنجليزية حاليًا.',
   },
 };
+
+/** Text without the invisible bidi isolates the right-to-left pages put around measurements. */
+const plain = (text: string) => text.replace(/[\u2066-\u2069]/g, '');
+
+/** hreflang alternates a translatable page must carry: every language plus x-default (English). */
+const alternates = (englishPath: string) => ({
+  ...Object.fromEntries(Object.values(LOCALES).map((l) => [l.hreflang, `${SITE}${l.prefix}${englishPath}`])),
+  'x-default': `${SITE}${englishPath}`,
+});
 
 const jsonLd = async (page: import('@playwright/test').Page) =>
   (await page.locator('script[type="application/ld+json"]').allTextContents()).map((b) => JSON.parse(b));
@@ -86,11 +107,7 @@ for (const code of TRANSLATED_LOCALES as Exclude<Locale, 'en'>[]) {
       await expect(page.locator('meta[property="og:locale"]')).toHaveAttribute('content', L.ogLocale);
 
       // hreflang: every language plus x-default (the English page)
-      expect(await hreflangs(page)).toEqual({
-        en: `${SITE}/us-passport-photo/`,
-        [L.hreflang]: `${SITE}${p('/us-passport-photo/')}`,
-        'x-default': `${SITE}/us-passport-photo/`,
-      });
+      expect(await hreflangs(page)).toEqual(alternates('/us-passport-photo/'));
 
       // FAQ JSON-LD parses, is in the page language and matches the visible FAQ
       const blocks = await jsonLd(page);
@@ -99,19 +116,50 @@ for (const code of TRANSLATED_LOCALES as Exclude<Locale, 'en'>[]) {
       expect(faq.mainEntity).toHaveLength(await page.locator('.pg-faq-item').count());
       expect(faq.mainEntity[0].name).toMatch(want.faqStart);
       const crumbs = blocks.find((b) => b['@type'] === 'BreadcrumbList');
-      expect(crumbs.itemListElement.at(-1).name).toBe('Pasaporte de Estados Unidos');
+      expect(crumbs.itemListElement.at(-1).name).toBe(want.usName);
 
       // the studio is English for now: link there, and say so
+      // two buttons: one in the page header, one under "Can you make it at home?"
       const studio = page.locator('main a.primary');
-      await expect(studio).toHaveAttribute('href', '/studio/?doc=us-passport');
+      await expect(studio).toHaveCount(2);
+      for (const href of await studio.evaluateAll((els) => els.map((e) => e.getAttribute('href'))))
+        expect(href).toBe('/studio/?doc=us-passport');
       await expect(page.locator('main')).toContainText(want.studioNote);
 
       // numbers keep their values in the local format
-      await expect(page.locator('main')).toContainText('50,8 × 50,8 mm (2 × 2 in)');
+      expect(plain(await page.locator('main').innerText())).toContain(want.usSize);
       await expect(page.locator('footer')).toContainText(want.independence);
       const text = await page.locator('main').innerText();
       expect(text).not.toMatch(BANNED[code]!);
       expect(words(text)).toBeGreaterThan(400);
+    });
+
+    test('reading direction: rtl languages mirror arrows and keep measurements in one run', async ({ page }) => {
+      await page.goto(p('/us-passport-photo/'));
+      const main = page.locator('main');
+      await expect(main).toHaveAttribute('dir', L.dir);
+      const arrow = page.locator('main a.primary svg').first();
+      const transform = await arrow.evaluate((el) => getComputedStyle(el).transform);
+      expect(transform === 'matrix(-1, 0, 0, 1, 0, 0)', `arrow transform ${transform}`).toBe(L.dir === 'rtl');
+      const raw = await main.innerText();
+      // isolates wrap "50.8 × 50.8 mm" in rtl pages only, so it cannot read "50.8 × 50.8" backwards
+      expect(/\u2066[^\u2069]*×[^\u2069]*\u2069/.test(raw)).toBe(L.dir === 'rtl');
+      // list bullets sit on the reading side: the list has padding at its inline start
+      const pad = await page.locator('.pg-rules').evaluate((el) => {
+        const cs = getComputedStyle(el);
+        return { left: parseFloat(cs.paddingLeft), right: parseFloat(cs.paddingRight) };
+      });
+      if (L.dir === 'rtl') expect(pad.right).toBeGreaterThan(pad.left);
+      else expect(pad.left).toBeGreaterThan(pad.right);
+    });
+
+    test('a document page does not scroll sideways on a phone', async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      for (const path of ['/us-passport-photo/', '/documents/', '/print-passport-photos/']) {
+        await page.goto(p(path));
+        const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+        expect(over, path).toBeLessThanOrEqual(0);
+      }
     });
 
     test('the page comes alive after its language pack loads', async ({ page }) => {
@@ -137,11 +185,7 @@ for (const code of TRANSLATED_LOCALES as Exclude<Locale, 'en'>[]) {
     test('the English page points back with the same alternates', async ({ page }) => {
       await page.goto('/us-passport-photo/');
       await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-      expect(await hreflangs(page)).toEqual({
-        en: `${SITE}/us-passport-photo/`,
-        [L.hreflang]: `${SITE}${p('/us-passport-photo/')}`,
-        'x-default': `${SITE}/us-passport-photo/`,
-      });
+      expect(await hreflangs(page)).toEqual(alternates('/us-passport-photo/'));
     });
 
     test('the documents index lists every document, grouped by country', async ({ page }) => {
@@ -161,10 +205,10 @@ for (const code of TRANSLATED_LOCALES as Exclude<Locale, 'en'>[]) {
       await page.goto(p('/de-passport-photo/'));
       await expect(footer().getByRole('link', { name: 'English' })).toHaveAttribute('href', '/de-passport-photo/');
       await expect(footer().locator('[aria-current="true"]')).toHaveText(want.switcherName);
-      await expect(page.locator('header a.lang-link')).toHaveAttribute('href', '/de-passport-photo/');
+      await expect(page.locator('header a.lang-link[hreflang="en"]')).toHaveAttribute('href', '/de-passport-photo/');
       await page.goto('/2x2-photo/');
       await expect(footer().getByRole('link', { name: want.switcherName })).toHaveAttribute('href', p('/2x2-photo/'));
-      await expect(page.locator('header a.lang-link')).toHaveAttribute('href', p('/2x2-photo/'));
+      await expect(page.locator(`header a.lang-link[hreflang="${L.hreflang}"]`)).toHaveAttribute('href', p('/2x2-photo/'));
       // pages without a translation offer the documents index instead, never a dead link
       for (const path of ['/', '/about/', '/privacy/', '/studio/']) {
         await page.goto(path);

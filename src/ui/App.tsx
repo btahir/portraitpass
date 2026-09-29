@@ -43,7 +43,7 @@ function readLocation(initialPath?: string, initialSearch?: string): Location {
 
 function NotFound() {
   return (
-    <main id="main" className="content-page">
+    <main id="main" className="content-page pg">
       <div className="eyebrow">Page not found</div>
       <h1 className="page-title">That page is not here.</h1>
       <p className="lede">

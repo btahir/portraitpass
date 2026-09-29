@@ -1,7 +1,28 @@
 /* Scoped to the static pages. Only tokens from styles.css are used. */
+/* Same container as the site header (.wrap: 1360px, 32px gutters) so the page starts at the logo's
+   left edge; text, tables and FAQ share one 720px reading column inside it. */
 .content-page.pg {
-  max-width: 940px;
-  margin-top: 40px;
+  max-width: 1360px;
+  width: 100%;
+  margin: 40px auto 24px;
+  padding: 0 32px;
+}
+.pg-head {
+  display: grid;
+  grid-template-columns: minmax(0, 720px);
+}
+.pg-head-text {
+  min-width: 0;
+}
+.pg-body {
+  max-width: 720px;
+}
+@media (min-width: 980px) {
+  .pg-head-aside {
+    grid-template-columns: minmax(0, 720px) minmax(240px, 340px);
+    column-gap: 72px;
+    align-items: start;
+  }
 }
 .pg-crumbs ol {
   display: flex;
@@ -31,7 +52,7 @@
   color: var(--ink);
 }
 .content-page.pg h1.pg-title {
-  font-size: clamp(38px, 5.6vw, 56px);
+  font-size: clamp(38px, 5.6vw, 54px);
   line-height: 1.08;
   margin: 12px 0 22px;
   text-wrap: balance;
@@ -64,7 +85,8 @@
   font-size: 13px;
   color: var(--muted);
   border-inline-start: 2px solid var(--accent);
-  padding: 2px 0 2px 14px;
+  padding: 2px 0;
+  padding-inline-start: 14px;
   margin: 20px 0;
 }
 .pg-cta {
@@ -74,8 +96,129 @@
   gap: 14px 20px;
   margin: 26px 0 6px;
 }
-.pg-cta .primary {
+.pg-cta .primary,
+.pg-actions .primary {
   text-decoration: none;
+}
+.pg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 18px;
+  margin: 26px 0 0;
+}
+.pg-actions .pg-tag {
+  margin: 0;
+}
+.content-page.pg .pg-actions-note {
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 320px;
+  line-height: 1.5;
+}
+.pg-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.pg-jump:hover {
+  color: var(--accent);
+}
+/* Arrows that point along the reading direction turn around in right-to-left pages. */
+[dir="rtl"] .pg-arrow,
+[dir="rtl"] .content-page.pg .lucide-arrow-right {
+  transform: scaleX(-1);
+}
+
+/* To-scale frame diagram (Diagram.tsx). The drawing has no text and never flips. */
+.pg-figure {
+  margin: 30px 0 0;
+  padding: 18px 20px 16px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+.pgd-svg {
+  display: block;
+  height: 220px;
+  width: auto;
+  max-width: 100%;
+}
+.pgd-frame {
+  fill: var(--surface);
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.pgd-body,
+.pgd-head {
+  fill: var(--line);
+  stroke: var(--muted);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.pgd-eyeband {
+  fill: var(--accent);
+  opacity: 0.28;
+}
+.pgd-eye {
+  fill: var(--ink);
+}
+.pgd-bracket line {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.pgd-bracket .pgd-strong {
+  stroke-width: 3;
+}
+.content-page.pg .pgd-legend {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-self: stretch;
+}
+.content-page.pg .pgd-legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.pgd-legend b {
+  color: var(--ink);
+  font-weight: 500;
+}
+.pgd-sw {
+  flex: none;
+  width: 22px;
+  height: 10px;
+  display: inline-block;
+}
+.pgd-sw-head {
+  height: 0;
+  border-top: 3px solid var(--accent);
+}
+.pgd-sw-eye {
+  background: var(--accent);
+  opacity: 0.35;
+}
+.pg-figure figcaption {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+  align-self: stretch;
 }
 .pg-cta .pg-note {
   margin: 0;
@@ -122,8 +265,22 @@
   border-top: 0;
   background: var(--soft);
 }
+.pg-list {
+  table-layout: fixed;
+}
 .pg-list tbody th {
   font-weight: 500;
+  width: 40%;
+}
+.pg-list.pg-auto {
+  table-layout: auto;
+}
+.pg-list.pg-auto tbody th {
+  width: auto;
+}
+.pg-list .pg-nowrap,
+.pg-list th.pg-nowrap {
+  white-space: nowrap;
 }
 .pg-list a,
 .pg-spec a {
@@ -146,9 +303,10 @@
   color: var(--muted);
   white-space: nowrap;
 }
-.pg-rules,
-.pg-steps {
-  padding-inline-start: 20px;
+.content-page.pg .pg-rules,
+.content-page.pg .pg-steps {
+  padding-left: 0;
+  padding-inline-start: 22px;
   margin: 12px 0;
 }
 .pg-rules li,
@@ -210,6 +368,15 @@
   font: 500 12px "DM Sans", sans-serif;
   color: var(--muted);
 }
+/* The heading already names the country: the table keeps its caption for screen readers only. */
+.pg-country .pg-table caption {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
 .pg-links {
   display: flex;
   flex-wrap: wrap;
@@ -226,11 +393,19 @@
 .pg-tiers {
   margin-top: 8px;
 }
-@media (max-width: 640px) {
+@media (max-width: 820px) {
   .content-page.pg {
     padding: 0 16px;
     margin-top: 24px;
   }
+  .pg-figure {
+    margin-top: 24px;
+  }
+  .pgd-svg {
+    height: 200px;
+  }
+}
+@media (max-width: 640px) {
   .pg-spec th,
   .pg-spec td {
     display: block;
