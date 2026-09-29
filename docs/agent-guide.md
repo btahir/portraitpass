@@ -1,6 +1,6 @@
 # PortraitPass for agents
 
-PortraitPass runs entirely on the local machine. No API key, external model, upload or server is needed for the core, CLI or MCP. The website is the product; the CLI and MCP server are thin extras for AI assistants working on local files. The browser adds human review, auto-framing, camera capture and an optional local segmentation mask. We check sizes and positions; the issuing authority decides acceptance. Follow the source rules linked from each document. There is no npm package.
+PortraitPass (https://portraitpass.vercel.app, source https://github.com/btahir/portraitpass, MIT) runs entirely on the local machine. No API key, external model, upload or server is needed for the core, CLI or MCP. The website is the product; the CLI and MCP server are thin extras for AI assistants working on local files. The browser adds human review, auto-framing, camera capture and an optional local segmentation mask. We check sizes and positions; the issuing authority decides acceptance. Follow the source rules linked from each document. There is no npm package.
 
 PortraitPass is an independent open-source project, not affiliated with or endorsed by any government or passport office.
 
@@ -16,7 +16,7 @@ pnpm install
 ./scripts/portraitpass render --input /absolute/photo.jpg --preset us-passport --format png --output /absolute/photo-sized.png --json
 ./scripts/portraitpass sheet --input /absolute/photo.jpg --preset uk-passport --paper 4x6 --format pdf --output /absolute/print-sheet.pdf --json
 ./scripts/portraitpass sheet --input /absolute/photo.jpg --preset uk-passport --paper letter --layout cut-marks --orientation landscape --format pdf --output /absolute/letter-sheet.pdf --json
-./scripts/portraitpass digital --input /absolute/photo.jpg --preset us-passport --width 600 --height 600 --max-kb 240 --kb-bytes 1000 --output /absolute/dv-lottery.jpg --json
+./scripts/portraitpass digital --input /absolute/photo.jpg --preset dv-lottery --width 600 --height 600 --max-kb 240 --kb-bytes 1000 --output /absolute/dv-lottery.jpg --json
 ./scripts/portraitpass project --input /absolute/photo.jpg --preset uk-passport --embed --output /absolute/photo.portraitpass.json --json
 ./scripts/portraitpass render --project /absolute/photo.portraitpass.json --output /absolute/reviewed-crop.jpg --json
 ```
@@ -38,7 +38,7 @@ The original six:
 - `general-id`: default 35 × 45 mm, optional custom dimensions and background mask. Background edits: `unspecified`. No claim about any authority's rules; check the receiving organisation.
 - `us-online`, `uk-online`: unchanged original bytes only; no crop, edit, sheet or alternate format. `us-online` accepts JPEG, PNG, HEIC and HEIF, 54 KB to 10 MB. `uk-online` is 50 KB to 10 MB, at least 600 × 750 px. These are the same documents as the dataset ids `us-passport-online` and `uk-passport-online`, which also resolve.
 
-Not DIY, so no preset: 14 dataset documents have `diy: "no"` (a commercial photographer, a booth, a certified provider or the office takes the photo). Examples: Canadian passport, German passport and ID card, French passport, US naturalization. Asking for one of them fails with `NOT_DIY` (exit 2), and the message carries the reason. Tell the person why (`diyNote` and the source URL are in the dataset) and do not substitute another document. `DOCUMENT_NOTICES` in `src/core/presets.ts` is an older two-entry list of the same idea (Canada, Germany).
+Not DIY, so no preset: 14 dataset documents have `diy: "no"` (a commercial photographer, a booth, a certified provider or the office takes the photo). Examples: Canadian passport, German passport, French passport and ID card, US naturalization. Asking for one of them fails with `NOT_DIY` (exit 2), and the message carries the reason. Tell the person why (`diyNote` and the source URL are in the dataset) and do not substitute another document.
 
 All crop and landmark coordinates are in **oriented original pixels**. `crop` is `{x,y,width,height}`. `landmarks` is `{centerX,crownY,eyesY,chinY}`. To propose a crop from manually reviewed landmarks:
 
@@ -48,7 +48,7 @@ All crop and landmark coordinates are in **oriented original pixels**. `crop` is
 ./scripts/portraitpass layout --preset uk-passport --paper a4 --json
 ```
 
-Default output is 300 DPI; `--dpi` accepts 72–600. For print and general presets the output format is inferred from the output extension (`.jpg`/`.jpeg`, `.png`, `.pdf`). An explicit `--format` that contradicts a recognised extension fails with `FORMAT_EXTENSION_MISMATCH`, as do `.webp`, `.gif`, `.tif`/`.tiff`, `.bmp`, `.avif`, `.heic`, `.heif` and `.svg` outputs. An unknown or missing extension falls back to the project's format. Original modes copy the source bytes, so the output extension must match the source type (`.jpg`/`.jpeg` for JPEG, `.png`, `.webp`, `.heic`/`.heif`); a JPEG/PNG/PDF-style extension that does not match fails the same way. Papers are `4x6`, `a4`, `letter`, portrait orientation. Safe print margins and gaps are 3 mm. Thus a 4×6 sheet holds two US 2×2 photos or six 35×45 photos. Print PDFs at actual size / 100%, with fit-to-page disabled. JPEG/PNG pixel dimensions are rounded to nearest pixel; PDF photo and paper sizes use physical millimetres exactly. Canvas and Sharp use different resampling filters; fractional source boundaries can differ by less than one source pixel. The stored source/crop dimensions remain identical.
+Default output is 300 DPI; `--dpi` accepts 72–600. For print and general presets the output format is inferred from the output extension (`.jpg`/`.jpeg`, `.png`, `.pdf`). An explicit `--format` that contradicts a recognised extension fails with `FORMAT_EXTENSION_MISMATCH`, as do `.webp`, `.gif`, `.tif`/`.tiff`, `.bmp`, `.avif`, `.heic`, `.heif` and `.svg` outputs. An unknown or missing extension falls back to the project's format. Original modes copy the source bytes, so the output extension must match the source type (`.jpg`/`.jpeg` for JPEG, `.png`, `.webp`, `.heic`/`.heif`); a JPEG/PNG/PDF-style extension that does not match fails the same way. Papers are `4x6`, `a4` and `letter`; sheet layout and orientation are set as described below. With `cut-marks`, margins and gaps are 3 mm. Photos per sheet are in the table below. Print PDFs at actual size / 100%, with fit-to-page disabled. JPEG/PNG pixel dimensions are rounded to nearest pixel; PDF photo and paper sizes use physical millimetres exactly. Canvas and Sharp use different resampling filters; fractional source boundaries can differ by less than one source pixel. The stored source/crop dimensions remain identical.
 
 ## Sheets: layout, orientation and exact digital files
 
@@ -69,7 +69,7 @@ With `edge-to-edge` on A4 and Letter: 20 for `us-passport`, 36 for the 35 × 45 
 **Exact digital export.** `digital` writes one JPEG at exact pixels inside a file-size range, for forms that state both (for example 600 × 600 px, at most 240 KB for a lottery photo, or 20 to 50 KB for an exam upload):
 
 ```sh
-./scripts/portraitpass digital --input /absolute/photo.jpg --preset us-passport --width 600 --height 600 --max-kb 240 --kb-bytes 1000 --output /absolute/dv.jpg --json
+./scripts/portraitpass digital --input /absolute/photo.jpg --preset dv-lottery --width 600 --height 600 --max-kb 240 --kb-bytes 1000 --output /absolute/dv.jpg --json
 ./scripts/portraitpass digital --input /absolute/photo.jpg --preset general-id --width 200 --height 230 --min-kb 20 --max-kb 50 --output /absolute/exam.jpg --json
 ```
 
@@ -79,7 +79,7 @@ The result carries `width`, `height`, `bytes`, `kb`, `kbBytes`, `minBytes`, `max
 
 ## The document dataset
 
-`DOCUMENTS` (exported from `src/core/index.ts`, defined in `src/core/documents.ts`, entries in `src/core/data/us.ts`, `south-asia.ts`, `europe.ts` and `world.ts`) is the open spec dataset. There is no CLI or MCP command that prints it yet; from TypeScript use `DOCUMENTS`, `getDocumentById`, `searchDocuments` and `popularDocuments`, or read the data files.
+`DOCUMENTS` (exported from `src/core/index.ts`, defined in `src/core/documents.ts`, entries in `src/core/data/us.ts`, `south-asia.ts`, `europe.ts` and `world.ts`) is the open spec dataset. There is no CLI or MCP command that prints it yet. The built site serves it as JSON at https://portraitpass.vercel.app/data/documents.json (top-level `name`, `license`, `lastChecked`, then `documents` with the fields below). From TypeScript use `DOCUMENTS`, `getDocumentById`, `searchDocuments` and `popularDocuments`, or read the data files.
 
 ```ts
 interface DocumentSpec {
@@ -102,7 +102,7 @@ interface DocumentSpec {
 How the studio and tools use an entry (`src/core/catalog.ts`):
 
 - `documentPreset(doc)` gives the frame: the print size when there is one, else the digital shape at 300 DPI. `undefined` for `diy: "no"`.
-- `documentDigitalTarget(doc)` gives the exact upload target `{widthPx, heightPx, minKB, maxKB, kbBytes, format: "jpeg"}` for 15 documents with a digital spec that accepts JPEG and is not `originalOnly`. The CLI `digital` command does not read it; pass the numbers as flags. For example `dv-lottery` is 600 × 600, at most 240 KB with `kbBytes` 1000; `in-upsc` is 600 × 600, 20 to 200 KB with 1024; `cn-visa` is 354 × 515, 40 to 120 KB with 1024.
+- `documentDigitalTarget(doc)` gives the exact upload target `{widthPx, heightPx, minKB, maxKB, kbBytes, format: "jpeg"}` for 15 documents with a digital spec that accepts JPEG and is not `originalOnly`. The CLI `digital` command does not read it; pass the numbers as flags. For example `dv-lottery` is 600 × 600, at most 240 KB with `kbBytes` 1000; `in-upsc` is 600 × 600, 20 to 200 KB with 1024; `cn-visa` is 324 × 472, 40 to 120 KB with 1024.
 - `originalOnly` documents that can be made at home (`us-passport-online`, `uk-passport-online`, `pk-passport-online`) export the untouched file, never a crop. (`ca-pr` is also original-only but is `diy: "no"`, so it has no preset.)
 - `background.edit: "forbidden"` means the authority's rules say the photo must be unaltered. Background replacement is off by default there and warns.
 

@@ -188,7 +188,6 @@ export function Canvas(props: CanvasProps) {
       props.onError(e instanceof Error ? e.message : "The preview could not be drawn.");
     }
     // props.onError is stable enough; it only reports.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photo, preset, crop, paperId, sheetStyle, sheetOrientation, showSheet, guides, background, original, landmarks, shown.w]);
 
   // Everything the pointer, wheel and key handlers need, without rebinding them on every render.

@@ -26,15 +26,6 @@ export interface Preset {
   minHeight?: number;
   mimeTypes?: string[];
 }
-/** A document people search for that cannot be made at home. Shown, never offered as a preset. */
-export interface DocumentNotice {
-  id: string;
-  name: string;
-  country: string;
-  reason: string;
-  sourceUrl: string;
-  checkedAt: string;
-}
 export interface Paper {
   id: string;
   name: string;

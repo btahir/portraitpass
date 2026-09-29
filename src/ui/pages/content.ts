@@ -432,4 +432,3 @@ export function sheetRows(): SheetRow[] {
 }
 
 export const absolute = (path: string) => `${SITE_URL}${path}`;
-export const docsWhere = (pred: (d: DocumentSpec) => boolean) => DOCUMENTS.filter(pred);

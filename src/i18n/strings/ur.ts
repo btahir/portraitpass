@@ -291,9 +291,6 @@ export const ur: Strings = {
     photosN: (n) => `${n} تصاویر`,
     studioFor: (name) => `${name} کے لیے اسٹوڈیو کھولیں`,
     figuresChecked: (date) => `اعداد کی جانچ: ${date}۔`,
-    px: (w, h) => `\u2066${w} × ${h} px\u2069`,
-    inDataset: "ہمارے ڈیٹا میں: ",
-    printGuideCrumb: "پرنٹنگ",
 
     twoByTwo: {
       crumb: "\u20662×2\u2069 انچ کی تصویر",

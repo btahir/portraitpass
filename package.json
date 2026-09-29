@@ -11,6 +11,10 @@
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/core/*.test.ts",
     "test:e2e": "pnpm build && playwright test",
+    "seo:audit": "tsx scripts/seo-audit.ts",
+    "indexnow": "tsx scripts/indexnow.ts",
+    "make:og": "tsx scripts/make-og.ts",
+    "make:icons": "tsx scripts/make-icons.ts",
     "cli": "tsx src/node/cli.ts",
     "mcp": "tsx src/node/mcp.ts"
   },

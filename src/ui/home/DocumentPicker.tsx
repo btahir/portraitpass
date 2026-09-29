@@ -59,7 +59,6 @@ export function DocumentPicker({ value, onChange, compact = false }: DocumentPic
     listRef.current
       ?.querySelector<HTMLElement>(`[id="${optId(active)}"]`)
       ?.scrollIntoView({ block: "nearest" });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, expanded]);
 
   const choose = (doc: DocumentSpec) => {

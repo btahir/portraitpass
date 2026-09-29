@@ -61,7 +61,6 @@ export function DocDiagram({ doc, locale = "en" }: { doc: DocumentSpec; locale?:
   const eyeMid = eye ? (eye[0] + eye[1]) / 2 : undefined;
   let chin = eyeMid !== undefined ? eyeMid - headH * 0.5 : (H - headH) * 0.55;
   chin = Math.max(H * 0.02, Math.min(chin, H - headH - H * 0.01));
-  const crown = chin + headH;
   const eyeAt = eyeMid ?? chin + headH * 0.5;
   const cx = W / 2;
   const rx = Math.min(headH * 0.36, W * 0.4);

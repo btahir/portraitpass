@@ -17,7 +17,7 @@ The website is the product. The CLI and MCP server are thin extras for AI assist
 
 - `DOCUMENTS` in `src/core/documents.ts` (entries in `src/core/data/us.ts`, `south-asia.ts`, `europe.ts`, `world.ts`) is the open spec dataset: 49 documents, each with print and/or digital specs, background colours and edit rule, plain rules, `diy` status (`yes`, `digital-only`, `no`), `diyNote`, `sources` (URL, title, `checkedAt`, `kind`) and `searchTerms`. The site, CLI, MCP, prerendered pages and llms.txt all read it. Do not invent country formats; every number needs a source on the authority's own domain and a check date.
 - `src/core/catalog.ts` turns entries into presets (`documentPreset`), exact upload targets (`documentDigitalTarget`), search (`searchDocuments`) and `presetForId`. `getPreset` resolves the six legacy preset ids first, then any dataset document id, so dataset ids work as `--preset`, `presetId` and in project files (`validateProject` uses `getPreset`).
-- Documents with `diy: "no"` (14 today, including the Canadian and German passports) have no preset and are never substituted. `DOCUMENT_NOTICES` in `src/core/presets.ts` is the older two-entry list of the same idea; new code reads `diy` from the dataset.
+- Documents with `diy: "no"` (14 today, including the Canadian and German passports) have no preset and are never substituted.
 - KB units: each digital spec sets `kbBytes` (1000 or 1024) by the rule at the top of `src/core/data/us.ts`. Keep it when editing.
 - Some authority sites block automated fetches, so parts of some entries rest on search-result text from the authority's domain. Evidence logs live in `notes/dataset/` (gitignored). Flag an entry rather than guess.
 - Re-check process: monthly, open every source URL, compare with the entry, change numbers and `checkedAt` together, and keep `tests/core/documents.test.ts` passing. A changed rule that affects a generated page changes the page on the next build.
@@ -38,13 +38,14 @@ The website is the product. The CLI and MCP server are thin extras for AI assist
 
 ## Site and offline
 
-- Site pages: `/`, `/studio/`, `/documents/`, one page per document, size and print pages, `/about/`, `/privacy/`, `/terms/`, `/accessibility/`, `/support/`, all prerendered with `scripts/prerender.ts`, plus `sitemap.xml`.
-- A service worker (`public/sw.js`) and manifest make the site installable and usable offline after the first visit (in progress in this wave; check `src/pwa.ts`). It stores only the site's own files; photos never reach it.
+- Live at https://portraitpass.vercel.app (GitHub: btahir/portraitpass). Site pages: `/`, `/studio/`, `/documents/`, one page per document, size and print pages, `/about/`, `/privacy/`, `/terms/`, `/accessibility/`, `/support/`, in English and, for documents, size pages, print guides and `/documents/`, six translated prefixes (`/es/`, `/pt/`, `/hi/`, `/bn/`, `/ur/`, `/ar/`); the home page, studio and legal pages are English. `scripts/prerender.ts` prerenders all 399 pages (397 indexable) plus the sitemap index and one sitemap per language, `robots.txt`, 56 social cards in `dist/og/` and the dataset at `dist/data/documents.json`.
+- SEO tooling: `scripts/seo-audit.ts <built folder> [--live URL]` audits a build; `scripts/indexnow.ts` (run by hand after a deploy, `--dry` first) tells Bing and other IndexNow engines which URLs changed. `scripts/make-icons.ts` and `scripts/make-og.ts` regenerate the icons and the default social card.
+- A service worker (`public/sw.js`) and manifest make the site installable and usable offline after the first visit (registered by `src/pwa.ts`). It stores only the site's own files; photos never reach it.
 - The host (Vercel) logs request data; the site sets no cookies and loads no third-party scripts. Fonts and models are self-hosted.
 
 ## Working here
 
 - Use `pnpm dev`, `pnpm typecheck`, `pnpm test`, `pnpm test:e2e`, `pnpm build`. Heavy browser/build jobs go through `../research/heavy.sh` in this workspace; Chrome headless only, at most two workers. Never install another browser.
-- Keep public documentation, source, tests and licenses consistent. `ACCEPTANCE.md`, `BRIEF.md`, `PLAN.md`, `notes/` and `docs/launch/`, `docs/design/` are internal and gitignored. No GitHub automation, deployment config, publication or external services.
+- Keep public documentation, source, tests and licenses consistent. `ACCEPTANCE.md`, `BRIEF.md`, `PLAN.md`, `notes/` and `docs/launch/`, `docs/design/` are internal and gitignored. No GitHub automation, publication or external services.
 - Local checks must cover geometry, parsed physical output, actual CLI and MCP calls, browser handoff, privacy and keyboard accessibility. Tests do not replace human photo review.
-- Deploy only when the owner approves.
+- Deploy and publish only when the owner approves. Support and tips live on the site's own `/support/` page.

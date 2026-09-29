@@ -9,6 +9,7 @@ export function warmExportTools() {
 import {
   BACKGROUND_NOTE,
   INDEPENDENCE_NOTE,
+  MAX_SOURCE_PIXELS,
   PortraitError,
   cropFromLandmarks,
   cropIssues,
@@ -30,7 +31,6 @@ import type {
   Crop,
   DigitalTarget,
   Preset,
-  Project,
   Landmarks,
   SheetLayout,
   SheetOrientation,
@@ -83,9 +83,6 @@ export const HEIC_PRINT_MESSAGE =
   "HEIC photos can be used as-is for US online renewal. For prints, use a JPEG: on iPhone, choose ‘Most Compatible’ in Settings › Camera › Formats, or share the photo as JPEG.";
 export const HEIC_UNSUPPORTED_MESSAGE =
   "This browser can't read HEIC photos. In Safari it works, or export as JPEG from your Photos app.";
-// One copy of the file wording, shared with the Node side (src/core/text.ts).
-export { BACKGROUND_NOTE };
-export const PDF_CREATOR = INDEPENDENCE_NOTE;
 const MAX_BYTES = 20 * 1024 * 1024;
 const SUPPORTED_TYPES =
   /^image\/(jpeg|png|webp|heic|heif|heic-sequence|heif-sequence)$/;
@@ -187,7 +184,7 @@ export async function loadPhoto(
     if (heif) return make(true);
     throw e instanceof Error ? e : new Error("This photo could not be opened.");
   }
-  if (image.naturalWidth * image.naturalHeight > 40_000_000) {
+  if (image.naturalWidth * image.naturalHeight > MAX_SOURCE_PIXELS) {
     URL.revokeObjectURL(url);
     throw new Error("Choose a photo under 40 megapixels.");
   }
@@ -696,7 +693,6 @@ export function originalFilename(photo: Pick<LoadedPhoto, "name" | "mime">) {
   const leaf = photo.name.split(/[\\/]/).pop() ?? "",
     stem = leaf
       .replace(/\.[^.]*$/, "")
-      // eslint-disable-next-line no-control-regex
       .replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069<>:"|?*%]/g, "")
       .replace(/^[.\s]+|[.\s]+$/g, "")
       .slice(0, 80)
@@ -798,15 +794,14 @@ export async function exportPhoto(
     const { PDFDocument, rgb } = await warmExportTools();
     const doc = await PDFDocument.create();
     doc.setTitle("PortraitPass photo print");
-    doc.setCreator(PDF_CREATOR);
+    doc.setCreator(INDEPENDENCE_NOTE);
     doc.setProducer("PortraitPass");
     doc.setSubject(
-      `Photo print prepared with ${PDF_CREATOR}${replaced ? ` ${BACKGROUND_NOTE}.` : ""}`,
+      `Photo print prepared with ${INDEPENDENCE_NOTE}${replaced ? ` ${BACKGROUND_NOTE}.` : ""}`,
     );
     doc.setKeywords([
       "PortraitPass",
-      "independent open-source tool",
-      "not affiliated with any government",
+      INDEPENDENCE_NOTE,
       ...(replaced ? [BACKGROUND_NOTE] : []),
     ]);
     const embedded = await doc.embedPng(
@@ -1300,7 +1295,7 @@ export async function openProject(
     if (
       size.width !== p.source.width ||
       size.height !== p.source.height ||
-      size.width * size.height > 40_000_000
+      size.width * size.height > MAX_SOURCE_PIXELS
     )
       throw new Error("Project mask size is invalid.");
   }

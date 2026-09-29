@@ -1,7 +1,9 @@
 node_modules/
 dist/
-.next/
 out/
+.vercel/
+*.log
+*.tsbuildinfo
 .env*
 .DS_Store
 BRIEF.md
@@ -14,5 +16,8 @@ test-results/
 playwright-report/
 *.mp4
 *.mov
+*.webm
 *.gif
 *.mp3
+scratch/
+tmp/

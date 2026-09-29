@@ -289,9 +289,6 @@ export const hi: Strings = {
     photosN: (n) => `${n} फोटो`,
     studioFor: (name) => `${name} के लिए स्टूडियो खोलें`,
     figuresChecked: (date) => `आँकड़े जाँचे गए: ${date}।`,
-    px: (w, h) => `${w} × ${h} px`,
-    inDataset: "हमारे डेटा में: ",
-    printGuideCrumb: "प्रिंटिंग",
 
     twoByTwo: {
       crumb: "2×2 इंच की फोटो",

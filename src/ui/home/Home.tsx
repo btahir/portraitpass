@@ -10,10 +10,10 @@ import { NotDiyExplainer } from "./NotDiyExplainer";
 import {
   docPagePath,
   firstSentence,
-  formatChecked,
   keySize,
   notDiy,
 } from "./docInfo";
+import { formatChecked } from "../format";
 import "./home.css";
 
 // The shell (App.tsx) renders SiteHeader / SiteFooter around every route, so

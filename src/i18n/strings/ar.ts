@@ -299,9 +299,6 @@ export const ar: Strings = {
     photosN,
     studioFor: (name) => `افتح المحرّر لوثيقة «${name}»`,
     figuresChecked: (date) => `روجعت الأرقام في ${date}.`,
-    px: (w, h) => `\u2066${w} × ${h} px\u2069`,
-    inDataset: "في بياناتنا: ",
-    printGuideCrumb: "الطباعة",
 
     twoByTwo: {
       crumb: "صورة \u20662×2\u2069 بوصة",

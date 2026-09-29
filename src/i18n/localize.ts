@@ -3,7 +3,7 @@
 import { DOCUMENTS, type DocumentSpec } from "../core/documents";
 import type { LocaleDocs } from "./docs/types";
 import { getPack, isLoaded } from "./registry";
-import { DEFAULT_LOCALE, TRANSLATED_LOCALES, type Locale } from "./index";
+import { DEFAULT_LOCALE, type Locale } from "./index";
 
 const cache = new Map<string, DocumentSpec>();
 
@@ -94,5 +94,3 @@ export const BANNED: Partial<Record<Locale, RegExp>> = {
   ar: new RegExp(`(?<!غير\\s)(?<![\\p{L}\\p{M}])(?:[وف]?(?:[بلك]?ال|لل|[بلك])?(?:${["رسمي", "أوفيشيال", "معتمد", "مضمونة", "مضمونا", "ضمان", "نضمن", "يضمن", "أضمن", "موثق", "مصدق", "تحققنا", "تم التحقق", "تم التأكد", "متحقق منه", "متحقق منها", "موافق عليه", "موافق عليها"].map((s) => s.split(" ").map((x) => [...x].join("\\p{M}*") + "\\p{M}*").join("\\s+")).join("|")})(?:(?:ة|ا|ين|ون|ات)\\p{M}*)?(?![\\p{L}\\p{M}])|(?:متوافق|مطابق|مستوف)(?:ة|ي|ية)?\\s+(?:مع\\s+(?:ال)?|لل?)(?:مواصفات|معايير|شروط|متطلبات|قواعد|لوائح|اشتراطات|قوانين))`, "u"),
 };
 
-/** Every locale that has pages. Convenience for scripts. */
-export const ALL_TRANSLATED = TRANSLATED_LOCALES;

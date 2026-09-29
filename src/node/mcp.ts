@@ -68,7 +68,7 @@ server.registerTool(
   "portraitpass_presets",
   {
     description:
-      "List source-backed document presets and print paper formats. No compliance guarantee.",
+      "List source-backed document presets and print paper formats. Sizes and ranges only; the issuing authority decides acceptance.",
     inputSchema: {},
     outputSchema: responseSchema,
     annotations: { readOnlyHint: true, openWorldHint: false },

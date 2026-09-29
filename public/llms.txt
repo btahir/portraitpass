@@ -4,10 +4,18 @@ Passport photos, sized exactly. Every measurement shown, your face never edited,
 
 PortraitPass is an independent open-source project, not affiliated with or endorsed by any government or passport office.
 
-The website is the product. The CLI and MCP server below are thin extras for AI assistants working on local files. There is no npm package; clone the repository and run pnpm install.
+The website is the product. The CLI and MCP server below are thin extras for AI assistants working on local files. There is no npm package; clone https://github.com/btahir/portraitpass and run pnpm install.
+
+## Key links
+- [Live site](https://portraitpass.vercel.app/): the photo studio and guides.
+- [All documents](https://portraitpass.vercel.app/documents/): every supported document, grouped by country.
+- [Dataset (JSON)](https://portraitpass.vercel.app/data/documents.json): sizes, head and eye ranges, KB limits, sources and check dates.
+- [US passport photo](https://portraitpass.vercel.app/us-passport-photo/), [DV lottery photo](https://portraitpass.vercel.app/dv-lottery-photo/), [India OCI photo](https://portraitpass.vercel.app/in-oci-photo/), [Schengen visa photo](https://portraitpass.vercel.app/schengen-visa-photo/).
+- [Printing guide](https://portraitpass.vercel.app/print-passport-photos/): 4x6 sheets at a photo counter.
+- [Source code](https://github.com/btahir/portraitpass) and [issues](https://github.com/btahir/portraitpass/issues) (report a wrong number with the source link).
 
 ## What the site does
-- 49 documents (passports, visas, ID and residence cards, a lottery, exam forms; 22 countries and regions), each with its source URL and check date. One page per document at /<id>-photo/, for example /us-passport-photo/, /dv-lottery-photo/, /in-oci-photo/. Index: /documents/.
+- 49 documents (passports, visas, ID and residence cards, a lottery, exam forms; 22 countries and regions), each with its source URL and check date. One page per document at /<id>-photo/, for example /us-passport-photo/, /dv-lottery-photo/, /in-oci-photo/. Index: /documents/. The whole dataset is one JSON file at /data/documents.json.
 - Auto-framing on the device, live measurements (head height, eye line, centring, resolution) and measure-only photo checks (background, shadow, lighting, exposure, sharpness).
 - Print sheets: 6-up 4x6 edge to edge (about 40 cents at a pharmacy photo counter; prices vary), A4 and Letter with cut marks. Exact pixel and KB JPEG export for upload forms. Original file passthrough where a form wants the untouched photo. Camera capture with hints.
 - Guides: /print-passport-photos/, /passport-photo-print-sheet/, /2x2-photo/, /35x45-photo/, /600x600-photo/, /photo-under-50kb/.
@@ -29,7 +37,7 @@ The website is the product. The CLI and MCP server below are thin extras for AI 
 ## Presets and document ids
 presets --json lists six original presets: us-passport, uk-passport, au-passport (print preparation only, sized to the published dimensions), general-id (custom dimensions, optional background replacement), us-online and uk-online (return the original bytes unchanged; never crop or edit; they fail with ORIGINAL_NOT_ACCEPTED, exit 3, if the file breaks the size, resolution or type limits).
 
-Any dataset document id that can be made at home also works as --preset, presetId or a project's presetId (35 of the 49), for example us-visa, dv-lottery, in-oci, schengen-visa, ie-passport, nl-passport, au-visa, cn-visa, jp-visa, kr-visa. Ids of not-DIY documents fail with INVALID_PRESET. Papers: 4x6, a4, letter. Default 300 DPI. All coordinates use oriented source pixels. HEIC and HEIF are accepted only for original passthrough of the US online renewal; other presets refuse them (UNSUPPORTED_IMAGE).
+Any dataset document id that can be made at home also works as --preset, presetId or a project's presetId (35 of the 49), for example us-visa, dv-lottery, in-oci, schengen-visa, ie-passport, nl-passport, au-visa, cn-visa, jp-visa, kr-visa. Ids of not-DIY documents fail with NOT_DIY (exit 2, the message says why); unknown ids fail with INVALID_PRESET. Papers: 4x6, a4, letter. Default 300 DPI. All coordinates use oriented source pixels. HEIC and HEIF are accepted only for original passthrough of the US online renewal; other presets refuse them (UNSUPPORTED_IMAGE).
 
 Notes to tell the person:
 - US passport: someone else takes the photo, or use a tripod. No selfies. No software, filter or AI changes.
@@ -38,13 +46,19 @@ Notes to tell the person:
 - Background replacement never edits a face. It is off by default where the rules forbid altered photos and warns when turned on; outputs that use it carry the metadata note "Background replaced with PortraitPass".
 
 ## The dataset
-Open MIT dataset of photo specs: src/core/documents.ts (types and DOCUMENTS), entries in src/core/data/us.ts, south-asia.ts, europe.ts, world.ts. Each entry: id, name, country, countryCode, kind, diy (yes, digital-only, no), diyNote, print (mm size, head range, eye range measured up from the bottom edge, paper), digital (pixel and KB limits, kbBytes 1000 or 1024, formats, originalOnly), background (colours, edit: forbidden or unspecified), rules, sources (URL, title, checkedAt, primary or secondary) and searchTerms. Numbers come from the issuing authority's own pages and forms with a check date. Some authority sites block automated fetches, so parts of some entries come from search-result text on the authority's domain; treat every entry as needing a re-check against the live page before you rely on it. Rules change: re-check monthly, update the number and checkedAt together, run pnpm test. Errors: open an issue with the source link.
+Open MIT dataset of photo specs: src/core/documents.ts (types and DOCUMENTS), entries in src/core/data/us.ts, south-asia.ts, europe.ts, world.ts. Each entry: id, name, country, countryCode, kind, diy (yes, digital-only, no), diyNote, print (mm size, head range, eye range measured up from the bottom edge, paper), digital (pixel and KB limits, kbBytes 1000 or 1024, formats, originalOnly), background (colours, edit: forbidden or unspecified), rules, sources (URL, title, checkedAt, primary or secondary) and searchTerms. Numbers come from the issuing authority's own pages and forms with a check date. Some authority sites block automated fetches, so parts of some entries come from search-result text on the authority's domain; treat every entry as needing a re-check against the live page before you rely on it. Rules change: re-check monthly, update the number and checkedAt together, run pnpm test. Wrong number: open an issue with the source link at https://github.com/btahir/portraitpass/issues.
 
 ## Privacy and limits
 Your photo never leaves your device. No external calls, keys, cookies, analytics or third-party scripts; fonts and models are self-hosted. The host (Vercel) logs request data such as IP addresses, separately from photos. Sources: single-frame JPEG/PNG/WebP (HEIC/HEIF only for the us-online original passthrough), at most 20 MiB and 40 megapixels. Portable project version 1: JSON with source data URL, crop, presetId, dpi, paperId, sheetStyle, sheetOrientation, format, optional landmarks (saved when set by hand or found by face detection) and background settings (the mask is kept only while background replacement is on); max 60 MiB. Project files contain the photo, settings, head positions when known, and the mask only while background replacement is on, so share them deliberately. Outputs require explicit paths, no overwrite by default; source and project files are always protected.
 
 ## Site pages
-/, /studio/ (the app; not indexed), /documents/, /about/, /privacy/, /terms/, /accessibility/, /support/ (optional tips; nothing is unlocked). The whole dataset is also served as JSON at /data/documents.json (MIT; every entry has its source URL and check date), and sitemap.xml lists every page in seven languages (en, es, pt, hi, bn, ur, ar). The site can be installed and works offline after the first visit (in progress; see src/pwa.ts).
+/, /studio/ (the app; not indexed), /documents/, /about/, /privacy/, /terms/, /accessibility/, /support/ (optional tips; nothing is unlocked). The whole dataset is also served as JSON at /data/documents.json (MIT; every entry has its source URL and check date). All pages are prerendered static HTML (399 today), so no script is needed to read them.
+
+Languages: document pages, size pages, the print guides and /documents/ exist in English (site root) and, under a prefix that mirrors the English path, in Spanish (/es/), Portuguese (/pt/), Hindi (/hi/), Bengali (/bn/), Urdu (/ur/) and Arabic (/ar/), for example /es/us-passport-photo/. Ids and slugs stay English. The home page, studio and legal pages are English only.
+
+Discovery: /sitemap.xml is an index of one sitemap per language (sitemap-en.xml, sitemap-es.xml and so on), each URL with a lastmod equal to the dataset check date. Translated pages carry hreflang alternates; document and guide pages carry JSON-LD and their own social card (/og/<slug>.png). /robots.txt allows search and AI crawlers. Changed URLs are announced to IndexNow engines with scripts/indexnow.ts after a deploy.
+
+Offline: the site can be installed and works offline after the first visit (public/sw.js caches only the site's own files; photos never reach it).
 
 ## Source rules
 Each document's page lists its source URLs and check date (for example travel.state.gov for US passports, gov.uk for UK photos, passports.gov.au for Australia, canada.ca for Canada). Geometric measurements do not decide acceptance. The person must check likeness, lighting, expression, recency and the destination's current rules.

@@ -304,9 +304,6 @@ export const bn: Strings = {
     photosN: (n) => `${n}টি ছবি`,
     studioFor: (name) => `“${name}”-এর জন্য স্টুডিও খুলুন`,
     figuresChecked: (date) => `সংখ্যাগুলো শেষবার দেখা হয়েছে ${date}।`,
-    px: (w, h) => `${w} × ${h} px`,
-    inDataset: "আমাদের ডেটায়: ",
-    printGuideCrumb: "প্রিন্ট",
 
     twoByTwo: {
       crumb: "2×2 ইঞ্চি ছবি",

@@ -1,6 +1,5 @@
 import {
   PortraitError,
-  type DocumentNotice,
   type Preset,
   type Paper,
 } from "./types.js";
@@ -117,29 +116,6 @@ export const PRESETS: Preset[] = [
     minHeight: 750,
     // Dimensions must be measured, so only formats every browser can decode.
     mimeTypes: ["image/jpeg", "image/png"],
-  },
-];
-/** Documents that need an approved photographer or provider. Never offered as presets. */
-export const DOCUMENT_NOTICES: DocumentNotice[] = [
-  {
-    id: "ca-passport",
-    name: "Canadian passport",
-    country: "Canada",
-    reason:
-      "Canada requires passport photos taken in person by a commercial photographer or photo studio. Photos made with this tool will not be accepted.",
-    sourceUrl:
-      "https://www.canada.ca/en/immigration-refugees-citizenship/services/canadian-passports/photos.html",
-    checkedAt,
-  },
-  {
-    id: "de-passport",
-    name: "German passport or ID card",
-    country: "Germany",
-    reason:
-      "Since 1 May 2025 German passport and ID photos must be digital, taken at the authority or by a certified provider. Paper and home photos are not accepted.",
-    sourceUrl:
-      "https://www.bmi.bund.de/SharedDocs/kurzmeldungen/DE/2025/04/neue-passbilder.html",
-    checkedAt,
   },
 ];
 export const PAPERS: Paper[] = [

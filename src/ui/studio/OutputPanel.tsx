@@ -28,6 +28,7 @@ import {
   type LoadedPhoto,
 } from "../../browser/engine";
 import { DOWNLOAD_NOTE } from "../../config";
+import { kbLabel, trimNumber } from "../format";
 import { PrintGuide } from "./PrintGuide";
 import "./output.css";
 
@@ -125,13 +126,9 @@ function messageOf(e: unknown) {
 function codeOf(e: unknown) {
   return (e as { code?: unknown } | null)?.code;
 }
-const oneDecimal = (n: number) => Math.round(n * 10) / 10;
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
-function formatBytes(bytes: number, unit: 1000 | 1024) {
-  if (bytes >= unit * unit) return `${oneDecimal(bytes / unit / unit)} MB`;
-  return `${Math.round(bytes / unit)} KB`;
-}
+const formatBytes = (bytes: number, unit: 1000 | 1024) => kbLabel(bytes / unit, unit);
 
 function tryLayout(
   preset: Preset,
@@ -530,7 +527,7 @@ export function OutputPanel({
             <div className="op-summary">
               <div>
                 <p className="op-count">
-                  {oneDecimal(preset.widthMm)} × {oneDecimal(preset.heightMm)} mm
+                  {trimNumber(preset.widthMm)} × {trimNumber(preset.heightMm)} mm
                 </p>
                 <p className="op-sub">{singleSize(preset, singleDpi)}</p>
               </div>
@@ -797,7 +794,6 @@ function SheetThumb({
     });
     return () => cancelAnimationFrame(frame);
     // crop and preset are keyed by their values (see cropKey and preset.id); object identity may change every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [photo, preset.id, cropKey, background, paperId, style, orientation]);
   return (
     <div

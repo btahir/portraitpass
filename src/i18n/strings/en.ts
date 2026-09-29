@@ -305,9 +305,6 @@ export const en = {
     photosN: (n: number): string => `${n} photos`,
     studioFor: (name: string): string => `Open the studio for the ${name}`,
     figuresChecked: (date: string): string => `Figures checked ${date}.`,
-    px: (w: string, h: string): string => `${w} × ${h} px`,
-    inDataset: "In our dataset: ",
-    printGuideCrumb: "Printing",
 
     twoByTwo: {
       crumb: "2×2 inch photo",

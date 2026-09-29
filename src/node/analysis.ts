@@ -1,9 +1,8 @@
 import sharp from "sharp";
 import { analyzePhoto } from "../core/analysis.js";
 import type { AnalysisBox, AnalysisExpectation, PhotoCheck } from "../core/analysis.js";
-import type { Crop } from "../core/index.js";
+import { MAX_SOURCE_PIXELS, type Crop } from "../core/index.js";
 
-const MAX_SOURCE_PIXELS = 40_000_000;
 const CROP_SIDE = 512;
 const MAX_AREA = 1_500_000;
 const DETAIL_WIDTH = 228;

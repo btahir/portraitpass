@@ -299,9 +299,6 @@ export const es: Strings = {
     photosN: (n) => `${n} fotos`,
     studioFor: (name) => `Abrir el estudio para el documento «${name}»`,
     figuresChecked: (date) => `Cifras comprobadas el ${date}.`,
-    px: (w, h) => `${w} × ${h} px`,
-    inDataset: "En nuestros datos: ",
-    printGuideCrumb: "Impresión",
 
     twoByTwo: {
       crumb: "Foto de 2×2 pulgadas",

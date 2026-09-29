@@ -140,8 +140,6 @@ export const LOCALE_CODES = Object.keys(LOCALES) as Locale[];
 /** Locales that get translated static pages (everything except the default). */
 export const TRANSLATED_LOCALES = LOCALE_CODES.filter((l) => l !== DEFAULT_LOCALE);
 
-export const isLocale = (x: string): x is Locale => x in LOCALES;
-
 /** Locale of a normalized pathname ("/es/documents/" is Spanish, everything else English). */
 export function localeOf(pathname: string): Locale {
   for (const l of TRANSLATED_LOCALES) {

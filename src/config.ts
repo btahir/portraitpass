@@ -1,8 +1,7 @@
 export const SITE_NAME = "PortraitPass";
 export const SITE_URL = "https://portraitpass.vercel.app";
 export const SUPPORT_URL = "/support/";
-// TODO(owner): replace with the real repository once it is public. Used for
-// contact and bug reports on the privacy, terms and accessibility pages.
+// Public repository. Used for contact and bug reports on the privacy, terms and accessibility pages.
 export const REPO_URL = "https://github.com/btahir/portraitpass";
 export const ISSUES_URL = `${REPO_URL}/issues`;
 export const LEGAL_UPDATED = "2026-09-28";

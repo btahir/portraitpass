@@ -291,9 +291,6 @@ export const pt: Strings = {
     photosN: (n) => `${n} fotos`,
     studioFor: (name) => `Abrir o estúdio para o documento “${name}”`,
     figuresChecked: (date) => `Números consultados em ${date}.`,
-    px: (w, h) => `${w} × ${h} px`,
-    inDataset: "Em nossos dados: ",
-    printGuideCrumb: "Impressão",
 
     twoByTwo: {
       crumb: "Foto de 2×2 polegadas",

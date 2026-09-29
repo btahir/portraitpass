@@ -2,12 +2,9 @@
 // not-DIY explainer. Everything is derived from the dataset; nothing here
 // invents a number.
 import type { DocumentSpec } from "../../core/index";
+import { kbLabel, trimNumber as trim } from "../format";
 
 const MM_PER_INCH = 25.4;
-
-function trim(n: number, digits = 1): string {
-  return String(Number(n.toFixed(digits)));
-}
 
 /** "2 × 2 in" for inch-based sizes, otherwise "35 × 45 mm". */
 export function printSizeLabel(w: number, h: number): string {
@@ -18,10 +15,6 @@ export function printSizeLabel(w: number, h: number): string {
     return `${trim(inW, 2)} × ${trim(inH, 2)} in`;
   }
   return `${trim(w)} × ${trim(h)} mm`;
-}
-
-function kbLabel(kb: number, unit: 1000 | 1024 = 1024): string {
-  return kb >= unit ? `${trim(kb / unit)} MB` : `${trim(kb, 0)} KB`;
 }
 
 /** Digital-upload size in a few words: "600 × 600 px, ≤ 240 KB". */
@@ -66,14 +59,6 @@ export function chipSize(doc: DocumentSpec): string {
   if (d?.widthPx && d.heightPx) return `${d.widthPx} px`;
   if (d?.minWidthPx) return `≥ ${d.minWidthPx} px`;
   return "upload";
-}
-
-/** "2026-09-28" to "28 Sep 2026", without touching the time zone. */
-export function formatChecked(iso: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-  if (!m) return iso;
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  return `${Number(m[3])} ${months[Number(m[2]) - 1]} ${m[1]}`;
 }
 
 export function notDiy(doc: DocumentSpec): boolean {

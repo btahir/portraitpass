@@ -1,5 +1,6 @@
 import { DOCUMENTS, type DocumentSpec } from "../../core/index";
-import { digitalLabel, docPagePath, formatChecked, printSizeLabel } from "./docInfo";
+import { digitalLabel, docPagePath, printSizeLabel } from "./docInfo";
+import { formatChecked } from "../format";
 import "./home.css";
 
 export interface NotDiyExplainerProps {

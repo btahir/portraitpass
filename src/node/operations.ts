@@ -11,6 +11,7 @@ import {
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import * as core from "../core/index.js";
+import { heifSize, sniffHeif } from "../core/heif.js";
 import {
   MAX_SOURCE_BYTES,
   MAX_PROJECT_BYTES,
@@ -175,53 +176,6 @@ export function parseJsonObject<T extends string>(
     );
   return value as Record<T, number>;
 }
-const HEIC_BRANDS = new Set([
-  "heic",
-  "heix",
-  "hevc",
-  "hevx",
-  "heim",
-  "heis",
-  "hevm",
-  "hevs",
-]);
-/** Identify HEIC/HEIF by its ISO-BMFF `ftyp` box without decoding pixels. */
-export function detectHeif(bytes: Uint8Array): SourceImage["mime"] | undefined {
-  const b = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.length);
-  if (b.length < 16 || b.toString("latin1", 4, 8) !== "ftyp") return undefined;
-  const size = b.readUInt32BE(0);
-  const end = size >= 16 && size <= b.length ? size : Math.min(b.length, 64);
-  const major = b.toString("latin1", 8, 12);
-  const brands = new Set([major]);
-  for (let i = 16; i + 4 <= end; i += 4)
-    brands.add(b.toString("latin1", i, i + 4));
-  if (brands.has("avif") || brands.has("avis")) return undefined;
-  if ([...brands].some((x) => HEIC_BRANDS.has(x))) return "image/heic";
-  if (major === "mif1" || major === "msf1") return "image/heif";
-  return undefined;
-}
-/** Largest `ispe` (image spatial extents) box: the primary image, not a thumbnail. */
-function heifDimensions(bytes: Buffer) {
-  let best: { width: number; height: number } | undefined;
-  for (
-    let at = bytes.indexOf("ispe");
-    at !== -1;
-    at = bytes.indexOf("ispe", at + 4)
-  ) {
-    if (at < 4 || at + 16 > bytes.length) continue;
-    if (bytes.readUInt32BE(at - 4) !== 20 || bytes.readUInt32BE(at + 4) !== 0)
-      continue;
-    const width = bytes.readUInt32BE(at + 8),
-      height = bytes.readUInt32BE(at + 12);
-    if (
-      width > 0 &&
-      height > 0 &&
-      (!best || width * height > best.width * best.height)
-    )
-      best = { width, height };
-  }
-  return best;
-}
 export async function readSource(input: string) {
   const info = await stat(input).catch(() => {
     throw new PortraitError(
@@ -240,10 +194,10 @@ export async function readSource(input: string) {
 export async function inspectBytes(bytes: Buffer, name = "photo") {
   if (bytes.length > MAX_SOURCE_BYTES)
     throw new PortraitError("FILE_TOO_LARGE", "Maximum source size is 20 MiB.");
-  const heif = detectHeif(bytes);
+  const heif = sniffHeif(bytes);
   if (heif) {
     // HEIC/HEIF are passed through untouched; Sharp's prebuilt libvips cannot decode HEVC.
-    const size = heifDimensions(bytes);
+    const size = heifSize(bytes);
     if (!size)
       throw new PortraitError(
         "UNSUPPORTED_IMAGE",

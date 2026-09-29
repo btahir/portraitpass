@@ -225,7 +225,6 @@ test("public/demo-shadow.png yields a background warning", { skip: existsSync(pa
 });
 test("public/demo-portrait.png passes the background checks", { skip: existsSync(path.join(publicDir, "demo-portrait.png")) ? false : "public/demo-portrait.png does not exist yet" }, async () => {
   const { checks } = await fileChecks("demo-portrait.png");
-  console.log("demo-portrait:", desc(Object.values(checks)));
   assert.equal(checks["background-even"].status, "pass", checks["background-even"].message);
   assert.equal(checks["background-shadow"].status, "pass", checks["background-shadow"].message);
   assert(ANALYSIS_THRESHOLDS.maxSide === 512);

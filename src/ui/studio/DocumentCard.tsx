@@ -4,9 +4,9 @@ import type { DocumentSpec, Preset } from "../../core/index";
 import { DocumentPicker } from "../home/DocumentPicker";
 import { digitalLabel, printSizeLabel } from "../home/docInfo";
 import { sourceLabel } from "../checks";
-import { checkedOn } from "./lib";
+import { formatChecked, trimNumber } from "../format";
 
-const n = (v: number) => String(Number(v.toFixed(1)));
+const n = (v: number) => trimNumber(v);
 const range = (min?: number, max?: number) =>
   min !== undefined && max !== undefined ? `${n(min)}–${n(max)} mm` : undefined;
 
@@ -149,7 +149,7 @@ export function DocumentCard({
           <a className="source-link" href={s.url} target="_blank" rel="noreferrer">
             {s.title} <ExternalLink size={12} aria-hidden="true" />
           </a>
-          <span>Requirements checked {checkedOn(s.checkedAt)}.</span>
+          <span>Requirements checked {formatChecked(s.checkedAt)}.</span>
         </p>
       ))}
       </div>
