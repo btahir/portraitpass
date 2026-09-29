@@ -1,0 +1,770 @@
+/* Home, DocumentPicker and NotDiyExplainer. Uses the shell's tokens
+   (--paper, --surface, --ink, --muted, --line, --accent, --accent-hover,
+   --soft, --stage) so light and dark follow the app. */
+
+.hm,
+.dp,
+.nd {
+  color: var(--ink);
+}
+.hm a,
+.nd a,
+.dp a {
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+}
+.hm a:hover,
+.nd a:hover,
+.dp a:hover {
+  color: var(--accent-hover);
+  text-decoration-color: currentColor;
+}
+.hm-hidden,
+.dp-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+/* ---------- Home layout ---------- */
+.hm {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 0 54px 40px;
+}
+.hm-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: 64px;
+  align-items: start;
+  padding: 40px 0 72px;
+}
+.hm h1 {
+  margin: 0;
+  font: 400 clamp(44px, 6vw, 72px) / 1 "Instrument Serif", Georgia, serif;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.hm h1 em {
+  color: var(--accent);
+  font-style: italic;
+}
+.hm-lede {
+  margin: 20px 0 30px;
+  max-width: 30em;
+  font-size: 18px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* ---------- Picker card ---------- */
+.hm-picker {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 20px;
+}
+.hm-picker-label {
+  margin: 0 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.hm-picked {
+  margin: 14px 0 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.hm-picked strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.hm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 18px;
+}
+.hm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 50px;
+  padding: 0 18px;
+  border: 1px solid var(--muted);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+}
+.hm-btn:hover {
+  border-color: var(--ink);
+  background: var(--soft);
+}
+.hm-btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.hm-btn--primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.hm-fine {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.hm-extra {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 0;
+  color: var(--muted);
+}
+.hm-extra button {
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-underline-offset: 4px;
+}
+.hm-extra button:hover {
+  color: var(--accent-hover);
+  text-decoration-color: currentColor;
+}
+
+/* ---------- Proof panel ---------- */
+.hm-proof {
+  margin: 0;
+}
+.hm-proof-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 40px;
+  padding: 44px 36px;
+  min-height: 520px;
+  background: var(--stage);
+  border-radius: 10px;
+}
+.hm-sheet {
+  flex: none;
+  width: 240px;
+  aspect-ratio: 2 / 3;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: repeat(3, 1fr);
+  background: #fff;
+  box-shadow: 0 18px 50px rgba(20, 30, 30, 0.18);
+}
+.hm-sheet-photo {
+  background: #f1efea url("/demo-portrait.webp") no-repeat 50% 61% / 107% auto;
+  outline: 1px dashed #c6c6c0;
+  outline-offset: -0.5px;
+}
+.hm-price {
+  margin: 0;
+  width: 200px;
+}
+.hm-price dt {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.hm-price dd {
+  margin: 0;
+}
+.hm-price-main dd {
+  margin-top: 8px;
+  font: 400 52px / 1 "Instrument Serif", Georgia, serif;
+  letter-spacing: -0.01em;
+}
+.hm-price-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid color-mix(in srgb, var(--muted) 40%, transparent);
+  font-size: 14px;
+}
+.hm-price-row dt {
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.hm-price-row dd {
+  white-space: nowrap;
+}
+.hm-price-row s {
+  color: var(--muted);
+}
+.hm-proof figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 20px;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---------- Sections ---------- */
+.hm-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 40px;
+  padding: 44px 0;
+  border-top: 1px solid var(--line);
+}
+.hm-section h2 {
+  margin: 0;
+  font: 400 32px / 1.1 "Instrument Serif", Georgia, serif;
+  letter-spacing: -0.005em;
+  text-wrap: balance;
+}
+.hm-section h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 600;
+}
+.hm-section p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.hm-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 32px;
+  counter-reset: step;
+}
+.hm-steps li::before {
+  counter-increment: step;
+  content: counter(step);
+  display: block;
+  margin-bottom: 10px;
+  font: 400 40px / 1 "Instrument Serif", Georgia, serif;
+  color: var(--accent);
+}
+.hm-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+}
+.hm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.hm-list li {
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.hm-list li:last-child {
+  border-bottom: 1px solid var(--line);
+}
+.hm-list--num {
+  counter-reset: n;
+}
+.hm-list--num li {
+  position: relative;
+  padding-left: 34px;
+}
+.hm-list--num li::before {
+  counter-increment: n;
+  content: counter(n);
+  position: absolute;
+  left: 0;
+  top: 8px;
+  font: 400 22px / 1.2 "Instrument Serif", Georgia, serif;
+  color: var(--accent);
+}
+.hm-note {
+  margin-top: 24px !important;
+  padding-left: 14px;
+  border-left: 3px solid var(--accent);
+  font-size: 14px !important;
+  color: var(--ink) !important;
+}
+.hm-print p {
+  margin-top: 18px;
+}
+.hm-intro {
+  max-width: 40em;
+  margin-bottom: 16px !important;
+}
+.hm-docs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 40px;
+}
+.hm-docs li {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 11px 0;
+  border-top: 1px solid var(--line);
+  font-size: 15px;
+}
+.hm-docs a {
+  font-weight: 500;
+}
+.hm-docs span {
+  font-size: 13.5px;
+  color: var(--muted);
+  text-align: right;
+}
+.hm-docs--why li {
+  display: block;
+}
+.hm-docs--why span {
+  display: block;
+  margin-top: 2px;
+  text-align: left;
+  line-height: 1.45;
+}
+.hm-more {
+  margin-top: 16px !important;
+}
+.hm-privacy {
+  max-width: 40em;
+}
+.hm-privacy p + p {
+  margin-top: 12px;
+}
+.hm-privacy p:first-child {
+  font-size: 16px;
+  color: var(--ink);
+}
+
+/* Shown only while a file is dragged over the page. */
+.hm-drop-hint {
+  display: none;
+  margin: 0;
+}
+.hm.is-dragging .hm-picker {
+  outline: 2px dashed var(--accent);
+  outline-offset: 5px;
+}
+.hm.is-dragging .hm-drop-hint {
+  display: block;
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 50;
+  padding: 12px 18px;
+  border-radius: 8px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 14px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+/* ---------- DocumentPicker ---------- */
+.dp {
+  position: relative;
+}
+.dp-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 14px;
+  border: 1px solid var(--muted);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--muted);
+}
+.dp-field:focus-within {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  border-color: var(--ink);
+}
+.dp-field input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 16px;
+  outline: none;
+}
+.dp-field input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+.dp-list {
+  position: absolute;
+  z-index: 30;
+  top: 58px;
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  max-height: min(360px, 60vh);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--muted);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  color: var(--ink);
+}
+.dp-list[hidden] {
+  display: none;
+}
+.dp-opt {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 12px;
+  align-items: baseline;
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 15px;
+}
+.dp-opt.is-active {
+  background: var(--soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.dp-name {
+  font-weight: 600;
+}
+.dp-meta {
+  grid-column: 1 / -1;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.dp-tag {
+  padding: 1px 7px;
+  border: 1px solid color-mix(in srgb, currentColor 40%, transparent);
+  border-radius: 4px;
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--accent-hover);
+}
+.dp-empty {
+  margin: 10px 0 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.dp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+.dp-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-height: 36px;
+  padding: 7px 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13.5px;
+  line-height: 1.3;
+  text-decoration: none;
+}
+.dp-chip small {
+  font-size: 12px;
+  color: var(--muted);
+}
+.dp-chip:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.dp-chip[aria-pressed="true"] {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+.dp-chip[aria-pressed="true"] small {
+  color: inherit;
+  opacity: 0.75;
+}
+.dp-chip--link {
+  border-style: dashed;
+  color: var(--muted);
+}
+
+/* Studio sidebar variant */
+.dp--compact .dp-field {
+  height: 42px;
+  padding: 0 11px;
+}
+.dp--compact .dp-field input {
+  font-size: 15px;
+}
+.dp--compact .dp-list {
+  position: static;
+  margin-top: 6px;
+  max-height: 320px;
+  box-shadow: none;
+}
+.dp--compact .dp-opt {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 9px 11px;
+  font-size: 14px;
+}
+.dp--compact .dp-meta {
+  font-size: 12px;
+}
+.dp--compact .dp-tag {
+  justify-self: start;
+}
+
+/* ---------- NotDiyExplainer ---------- */
+.nd {
+  max-width: 46em;
+}
+.nd-title {
+  margin: 0 0 12px;
+  font: 400 34px / 1.1 "Instrument Serif", Georgia, serif;
+  letter-spacing: -0.005em;
+  text-wrap: balance;
+}
+.nd-note {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.55;
+}
+.nd-block {
+  margin-top: 28px;
+}
+.nd-block h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.nd-block p {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.nd-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 14px;
+  font-size: 15px;
+}
+.nd-table th,
+.nd-table td {
+  padding: 9px 0;
+  border-top: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.nd-table tr:last-child th,
+.nd-table tr:last-child td {
+  border-bottom: 1px solid var(--line);
+}
+.nd-table th {
+  width: 38%;
+  padding-right: 16px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.nd-table:has(+ .nd-rules) {
+  margin-bottom: 0;
+}
+.nd-table:has(+ .nd-rules) tr:last-child th,
+.nd-table:has(+ .nd-rules) tr:last-child td {
+  border-bottom: 0;
+}
+.nd-rules,
+.nd-sources {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1.5;
+}
+.nd-rules li,
+.nd-sources li {
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+.nd-rules li:last-child,
+.nd-sources li:last-child {
+  border-bottom: 1px solid var(--line);
+}
+.nd-sources span {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+}
+.nd-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+  margin: 24px 0 0;
+}
+.nd-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-underline-offset: 4px;
+}
+.nd-link:hover {
+  color: var(--accent-hover);
+  text-decoration-color: currentColor;
+}
+.nd--compact {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.nd--compact .nd-title {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+.nd--compact .nd-note {
+  font-size: 15px;
+}
+.nd--compact .nd-links {
+  margin-top: 14px;
+}
+.nd--compact .nd-link {
+  font-size: 14px;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1100px) {
+  .hm {
+    padding: 0 32px 32px;
+  }
+  .hm-hero {
+    gap: 40px;
+  }
+  .hm-proof-stage {
+    gap: 28px;
+    padding: 36px 24px;
+  }
+  .hm-sheet {
+    width: 180px;
+  }
+  .hm-price {
+    width: 160px;
+  }
+  .hm-steps {
+    gap: 24px;
+  }
+}
+@media (max-width: 860px) {
+  .hm-hero {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 28px 0 48px;
+  }
+  .hm-section {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+    padding: 36px 0;
+  }
+  .hm-proof-stage {
+    min-height: 0;
+  }
+}
+@media (max-width: 640px) {
+  .hm {
+    padding: 0 20px 24px;
+  }
+  .hm-lede {
+    font-size: 17px;
+    margin: 16px 0 24px;
+  }
+  .hm-picker {
+    padding: 16px;
+  }
+  .hm-actions {
+    grid-template-columns: 1fr;
+  }
+  .hm-proof-stage {
+    gap: 22px;
+    padding: 28px 18px;
+  }
+  .hm-sheet {
+    width: 138px;
+  }
+  .hm-price {
+    width: auto;
+    flex: 1;
+    min-width: 0;
+  }
+  .hm-price-main dd {
+    font-size: 40px;
+  }
+  .dp-chip small {
+    display: none;
+  }
+  .hm-steps,
+  .hm-cols,
+  .hm-docs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .hm-steps {
+    gap: 24px;
+  }
+  .hm-section h2 {
+    font-size: 28px;
+  }
+  .nd-title {
+    font-size: 28px;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .hm-btn,
+  .dp-chip {
+    transition:
+      background-color 0.15s,
+      border-color 0.15s;
+  }
+}

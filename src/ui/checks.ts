@@ -1,4 +1,5 @@
 import type { MeasurementCheck, Preset } from "../core/index";
+import type { PhotoCheck, PhotoCheckId } from "../core/analysis";
 
 export const CHECK_LABELS: Record<MeasurementCheck["id"], string> = {
   head: "Head height",
@@ -45,4 +46,119 @@ export function sourceLabel(preset: Preset): string {
   if (preset.country === "Australia")
     return "Australian Passport Office photo rules";
   return "Photo rules (source)";
+}
+
+/** One plain line under each measurement label. */
+export const CHECK_HINTS: Record<MeasurementCheck["id"], string> = {
+  head: "crown to chin",
+  eyes: "measured from the bottom edge",
+  centre: "face midline against the photo",
+  resolution: "pixels per inch, no enlarging",
+};
+
+export const PHOTO_CHECK_LABELS: Record<PhotoCheckId, string> = {
+  "background-even": "Even background",
+  "background-shadow": "Shadows on the background",
+  "background-colour": "Background colour",
+  "lighting-even": "Even light on the face",
+  exposure: "Exposure",
+  sharpness: "Sharpness",
+};
+export const PHOTO_CHECK_ORDER: PhotoCheckId[] = [
+  "background-even",
+  "background-shadow",
+  "background-colour",
+  "lighting-even",
+  "exposure",
+  "sharpness",
+];
+export function photoStatusWord(check: PhotoCheck): string {
+  return check.status === "pass"
+    ? "Looks fine"
+    : check.status === "warn"
+      ? "Look at this"
+      : "Not checked";
+}
+
+/** A row the checks panel can show for an original-only document: file type, size and pixels. */
+export interface FileCheck {
+  id: "type" | "size" | "pixels";
+  status: "pass" | "fail" | "unknown";
+  label: string;
+  value?: string;
+  range?: string;
+  message: string;
+}
+const MIME_NAMES: Record<string, string> = {
+  "image/jpeg": "JPEG",
+  "image/png": "PNG",
+  "image/webp": "WebP",
+  "image/heic": "HEIC",
+  "image/heif": "HEIF",
+};
+function kb(bytes: number) {
+  return bytes >= 1_000_000
+    ? `${(bytes / 1_000_000).toFixed(1)} MB`
+    : `${Math.round(bytes / 1000)} KB`;
+}
+export function fileChecks(
+  preset: Preset,
+  photo: {
+    file: { type: string; size: number };
+    mime: string;
+    width: number;
+    height: number;
+  },
+): FileCheck[] {
+  const rows: FileCheck[] = [];
+  if (preset.mimeTypes) {
+    const ok = preset.mimeTypes.includes(photo.file.type);
+    const names = preset.mimeTypes.map((m) => MIME_NAMES[m] ?? m);
+    rows.push({
+      id: "type",
+      status: ok ? "pass" : "fail",
+      label: "File type",
+      value: MIME_NAMES[photo.file.type] ?? photo.file.type,
+      range: names.join(", "),
+      message: ok
+        ? "This file type is accepted."
+        : `This application needs ${names.join(" or ")}. Choose an accepted original file.`,
+    });
+  }
+  if (preset.minBytes || preset.maxBytes) {
+    const size = photo.file.size;
+    const ok =
+      (!preset.minBytes || size >= preset.minBytes) &&
+      (!preset.maxBytes || size <= preset.maxBytes);
+    rows.push({
+      id: "size",
+      status: ok ? "pass" : "fail",
+      label: "File size",
+      value: kb(size),
+      range: `${preset.minBytes ? kb(preset.minBytes) : "0 KB"} to ${preset.maxBytes ? kb(preset.maxBytes) : "any"}`,
+      message: ok
+        ? "The file size is inside the accepted range."
+        : "The file is outside the accepted size range. Choose another original.",
+    });
+  }
+  if (preset.minWidth || preset.minHeight) {
+    const known = photo.width > 0 && photo.height > 0;
+    const ok =
+      known &&
+      (!preset.minWidth || photo.width >= preset.minWidth) &&
+      (!preset.minHeight || photo.height >= preset.minHeight);
+    rows.push({
+      id: "pixels",
+      status: !known ? "unknown" : ok ? "pass" : "fail",
+      label: "Size in pixels",
+      value: known ? `${photo.width} × ${photo.height} px` : undefined,
+      range: `at least ${preset.minWidth ?? 0} × ${preset.minHeight ?? 0} px`,
+      message: !known
+        ? "This browser cannot read the pixel size of this file."
+        : ok
+          ? "The photo has enough pixels."
+          : "The photo has too few pixels for this application.",
+    });
+  }
+  return rows;
 }

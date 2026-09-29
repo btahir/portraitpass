@@ -3,7 +3,7 @@ import sharp from 'sharp';
 import { geometryImage, downloadBytes } from './helpers';
 
 test('4K source crop and export timings meet local budget; EXIF orientation follows decoded pixels', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/studio/?doc=uk-passport');
   const oriented = await sharp(await geometryImage('jpeg', 1200, 1600)).withMetadata({ orientation: 6 }).jpeg().toBuffer();
   await page.getByLabel('Choose a photo', { exact: true }).setInputFiles({ name: 'rotated.jpg', mimeType: 'image/jpeg', buffer: oriented });
   await expect(page.getByRole('button', { name: 'Save project', exact: true })).toBeEnabled();
@@ -11,8 +11,11 @@ test('4K source crop and export timings meet local budget; EXIF orientation foll
   await page.getByRole('button', { name: 'Save project', exact: true }).click();
   const project = JSON.parse((await downloadBytes(await projectDownload)).toString());
   expect([project.source.width, project.source.height]).toEqual([1600, 1200]);
+  await page.getByRole('button', { name: 'Start over', exact: true }).click();
   const input = await geometryImage('jpeg', 3840, 2160);
   await page.getByLabel('Choose a photo', { exact: true }).setInputFiles({ name: '4k.jpg', mimeType: 'image/jpeg', buffer: input });
+  await expect(page.getByRole('button', { name: 'Save project', exact: true })).toBeEnabled();
+  await page.getByRole('tab', { name: 'Single photo' }).click();
   await expect(page.getByRole('button', { name: 'Download photo', exact: true })).toBeEnabled();
   await page.evaluate(() => {
     const state = window as unknown as { __cropStart: number; __cropMs: number; __exportStart: number; __exportMs: number };
@@ -24,7 +27,7 @@ test('4K source crop and export timings meet local budget; EXIF orientation foll
       if (state.__cropStart && !state.__cropMs) { state.__cropMs = performance.now() - state.__cropStart; state.__cropStart = 0; }
       return result;
     };
-    document.addEventListener('click', event => { if ((event.target as Element).closest('.download-button')) state.__exportStart = performance.now(); }, { capture: true });
+    document.addEventListener('click', event => { if ((event.target as Element).closest('button')?.textContent?.includes('Download photo')) state.__exportStart = performance.now(); }, { capture: true });
     const objectUrl = URL.createObjectURL;
     URL.createObjectURL = function (blob) {
       if (state.__exportStart && blob instanceof Blob && blob.type.startsWith('image/')) state.__exportMs = performance.now() - state.__exportStart;

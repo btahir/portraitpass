@@ -1,0 +1,396 @@
+/* Camera modal. Uses the app's tokens; every class is prefixed cc- so nothing leaks. */
+.cc-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgb(14 24 28 / 0.66);
+}
+.cc-dialog {
+  width: 100%;
+  max-width: 1080px;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  background: var(--surface, #fffef9);
+  color: var(--ink, #1c3037);
+  border: 1px solid var(--line, #d7dcd3);
+  border-radius: 10px;
+  padding: 20px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  outline: none;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.cc-head-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.cc-head-bar h2 {
+  margin: 0;
+  font-family: "Instrument Serif", serif;
+  font-weight: 400;
+  font-size: 30px;
+  line-height: 1.1;
+}
+.cc-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: none;
+  border: 1px solid var(--line, #d7dcd3);
+  border-radius: 50%;
+  color: inherit;
+}
+.cc-close:hover {
+  background: var(--soft, #e9ede5);
+}
+.cc-privacy {
+  margin: 0;
+  color: var(--muted, #596868);
+}
+
+/* Buttons */
+.cc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 9px 16px;
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--line, #d7dcd3);
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.cc-btn:hover:not(:disabled) {
+  background: var(--soft, #e9ede5);
+}
+.cc-btn[aria-pressed="true"] {
+  background: var(--soft, #e9ede5);
+  border-color: var(--ink, #1c3037);
+}
+.cc-primary,
+.cc-primary:hover:not(:disabled) {
+  background: var(--accent, #b64a2d);
+  border-color: var(--accent, #b64a2d);
+  color: var(--accent-ink, #fffaf1);
+}
+.cc-primary:hover:not(:disabled) {
+  background: var(--accent-hover, #98391e);
+  border-color: var(--accent-hover, #98391e);
+}
+
+/* Intro and error */
+.cc-intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 24px;
+  align-items: start;
+}
+.cc-intro-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 62ch;
+}
+.cc-intro-copy p {
+  margin: 0;
+}
+.cc-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 230px;
+}
+.cc-check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.cc-check input {
+  width: 20px;
+  height: 20px;
+  margin: 2px 0 0;
+  flex-shrink: 0;
+  accent-color: var(--accent, #b64a2d);
+}
+.cc-check-small {
+  align-items: center;
+  font-size: 13px;
+}
+.cc-check-small input {
+  margin: 0;
+}
+.cc-error {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  color: var(--warn, #8a4f0c);
+  font-weight: 500;
+}
+.cc-error svg {
+  margin-top: 2px;
+}
+.cc-tip {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--soft, #e9ede5);
+  border-radius: 6px;
+  font-size: 13px;
+}
+.cc-tip svg {
+  margin-top: 2px;
+  color: var(--sage, #536e56);
+}
+
+/* Live view */
+.cc-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 24px;
+  align-items: start;
+}
+.cc-main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.cc-stage {
+  position: relative;
+  margin-inline: auto;
+  width: min(100%, calc((100dvh - 250px) * var(--arn, 1.333)));
+  aspect-ratio: var(--ar, 4 / 3);
+  background: #10181b;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.cc-video,
+.cc-review {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  display: block;
+}
+.cc-video[hidden] {
+  display: none;
+}
+.cc-video.is-mirrored {
+  transform: scaleX(-1); /* preview only; the saved photo is never mirrored */
+}
+.cc-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  --cc-line: #ffffff;
+}
+.cc-overlay.is-aligned {
+  --cc-line: #b7e0b0;
+}
+.cc-dim {
+  fill: #0c1417;
+  fill-opacity: 0.5;
+}
+.cc-frame {
+  fill: none;
+  stroke: var(--cc-line);
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
+.cc-eyeband {
+  fill: var(--cc-line);
+  fill-opacity: 0.22;
+  stroke: var(--cc-line);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+}
+.cc-centre {
+  stroke: var(--cc-line);
+  stroke-opacity: 0.7;
+  stroke-width: 1px;
+  stroke-dasharray: 6 6;
+  vector-effect: non-scaling-stroke;
+}
+.cc-head {
+  fill: none;
+  stroke: var(--cc-line);
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
+}
+.cc-head-min {
+  stroke-dasharray: 7 6;
+  stroke-opacity: 0.85;
+}
+.cc-eye {
+  fill: #ffd27a;
+  stroke: #10181b;
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
+.cc-status {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  color: #f2f0e5;
+  font-weight: 500;
+}
+.cc-count {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-family: "Instrument Serif", serif;
+  font-size: clamp(72px, 18vw, 160px);
+  line-height: 1;
+  text-shadow: 0 2px 16px rgb(0 0 0 / 0.65);
+  pointer-events: none;
+}
+.cc-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+.cc-shutter {
+  min-width: 160px;
+}
+.cc-meta {
+  margin: 0;
+  text-align: center;
+  color: var(--muted, #596868);
+  font-size: 13px;
+}
+
+/* Side panel */
+.cc-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.cc-side h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--muted, #596868);
+}
+.cc-hints {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cc-hint {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 10px;
+  border: 1px solid var(--line, #d7dcd3);
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.cc-hint svg {
+  margin-top: 1px;
+}
+.cc-hint strong {
+  font-weight: 600;
+  margin-right: 4px;
+}
+.cc-hint.is-ok svg {
+  color: var(--ok, #3f6b45);
+}
+.cc-hint.is-warn {
+  border-color: var(--warn, #8a4f0c);
+  background: var(--warn-soft, #f6ead7);
+}
+.cc-hint.is-warn svg {
+  color: var(--warn, #8a4f0c);
+}
+.cc-hint.is-idle {
+  color: var(--muted, #596868);
+}
+.cc-note,
+.cc-legend {
+  margin: 0;
+  color: var(--muted, #596868);
+  font-size: 13px;
+}
+.cc-legend {
+  font-size: 12px;
+}
+.cc-file {
+  display: none;
+}
+.cc-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 860px) {
+  .cc-body,
+  .cc-intro {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cc-actions {
+    min-width: 0;
+  }
+  .cc-stage {
+    width: min(100%, calc((100dvh - 360px) * var(--arn, 1.333)));
+  }
+}
+@media (max-width: 560px) {
+  .cc-backdrop {
+    padding: 0;
+    place-items: stretch;
+  }
+  .cc-dialog {
+    max-height: 100dvh;
+    height: 100dvh;
+    border-radius: 0;
+    border: 0;
+    padding: 14px 16px 18px;
+  }
+  .cc-head-bar h2 {
+    font-size: 26px;
+  }
+  .cc-controls > .cc-btn {
+    flex: 1 1 auto;
+  }
+  .cc-shutter {
+    flex-basis: 100%;
+    order: -1;
+  }
+}

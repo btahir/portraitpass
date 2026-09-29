@@ -1,110 +1,130 @@
+// Prerenders every static route to dist/<path>/index.html, plus sitemap.xml and
+// robots.txt. Run after `vite build`. Set OUT_DIR to build into another folder.
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { createServer } from "vite";
 import { renderToString } from "react-dom/server";
 import { createElement } from "react";
-import { SITE_URL } from "../src/config";
-const routes: Record<string, { title: string; description: string }> = {
-  "/": {
-    title: "PortraitPass — Free passport photo maker, sized exactly",
-    description:
-      "Free passport and ID photo maker that runs in your browser. Exact sizes, head and eye guides, and print sheets. Nothing is uploaded, no watermark, no account.",
-  },
-  "/support/": {
-    title: "Support PortraitPass",
-    description:
-      "Help keep PortraitPass free, private and available to everyone.",
-  },
-  "/about/": {
-    title: "About PortraitPass",
-    description:
-      "An independent open-source passport photo tool. Your photos stay on your device. Learn how it works and what it cannot promise.",
-  },
-  "/privacy/": {
-    title: "Privacy — PortraitPass",
-    description:
-      "Your photo never leaves your device. What the host logs, why there are no cookies or analytics, and what a saved project file contains.",
-  },
-  "/terms/": {
-    title: "Terms — PortraitPass",
-    description:
-      "PortraitPass is a free open-source tool provided as is, under the MIT License, with no guarantee that any photo is accepted.",
-  },
-  "/accessibility/": {
-    title: "Accessibility — PortraitPass",
-    description:
-      "How PortraitPass works with a keyboard and screen reader, known limits, and how to report a barrier.",
-  },
-  "/us-passport-photo/": {
-    title: "US passport photo, 2×2 inches — PortraitPass",
-    description:
-      "Prepare a 2 by 2 inch US passport photo and print sheet locally, with source-backed dimensions and framing guides.",
-  },
-  "/uk-passport-photo/": {
-    title: "UK passport photo 35×45 — PortraitPass",
-    description:
-      "Prepare 35×45 mm printed UK passport photos. For online applications, keep your digital original unchanged.",
-  },
-  "/35x45-photo/": {
-    title: "35×45 mm photo maker — PortraitPass",
-    description:
-      "Crop and arrange a 35×45 mm photo on a precisely sized print sheet, privately in your browser.",
-  },
-  "/passport-photo-print-sheet/": {
-    title: "Passport photos on a 4×6 print sheet — PortraitPass",
-    description:
-      "Make a printable passport photo sheet with exact physical sizing, cut marks, and 4×6, A4 or Letter paper.",
-  },
-};
-let template = await readFile("dist/index.html", "utf8");
-// The studio's small stylesheet is critical to its first paint. Inline the built
-// stylesheet so static pages do not wait for a separate mobile network round trip.
+import { SITE_NAME, SITE_URL } from "../src/config";
+
+const OUT_DIR = resolve(process.env.OUT_DIR || "dist");
+
+const escapeHtml = (s: string) =>
+  s
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+const escapeXml = escapeHtml;
+/** JSON for an inline <script>: keep "<" and line separators from ending it. */
+const jsonForScript = (value: unknown) =>
+  JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+
+let template = await readFile(resolve(OUT_DIR, "index.html"), "utf8");
+// The built stylesheet is critical to first paint. Inline it so static pages
+// do not wait on a separate mobile network round trip.
 for (const match of template.matchAll(
   /<link[^>]+rel="stylesheet"[^>]+href="([^"]+)"[^>]*>/g,
 )) {
   const css = await readFile(
-    resolve("dist", match[1].replace(/^\//, "")),
+    resolve(OUT_DIR, match[1].replace(/^\//, "")),
     "utf8",
   );
-  template = template.replace(match[0], `<style>${css}</style>`);
+  template = template.replace(match[0], () => `<style>${css}</style>`);
 }
+// Head tags this script owns: drop any the template already has.
+template = template
+  .replace(/<title>.*?<\/title>/s, "")
+  .replace(/<meta name="description"[^>]*>/g, "")
+  .replace(/<link rel="canonical"[^>]*>/g, "")
+  .replace(/<meta (?:property|name)="(?:og|twitter):[^>]*>/g, "");
 
 const server = await createServer({
   server: { middlewareMode: true },
   appType: "custom",
+  logLevel: "warn",
 });
 try {
   const { default: App } = await server.ssrLoadModule("/src/ui/App.tsx");
-  for (const [path, meta] of Object.entries(routes)) {
+  const { staticRoutes, routeMeta, matchStaticRoute } = await server.ssrLoadModule(
+    "/src/ui/routes.tsx",
+  );
+  const paths: string[] = staticRoutes();
+  const titles = new Map<string, string>();
+
+  for (const path of paths) {
+    const meta = routeMeta(path);
+    if (!meta) throw new Error(`No metadata for ${path}`);
     const rendered = renderToString(createElement(App, { initialPath: path }));
+    if (matchStaticRoute(path) && !rendered.includes("data-pp-page="))
+      throw new Error(
+        `App did not render the static page for ${path}; check that App calls matchStaticRoute.`,
+      );
+    const clash = titles.get(meta.title);
+    if (clash) throw new Error(`Duplicate title "${meta.title}" on ${clash} and ${path}`);
+    titles.set(meta.title, path);
+
+    const title = escapeHtml(meta.title);
+    const description = escapeHtml(meta.description);
+    const url = escapeHtml(meta.canonical);
+    const image = `${SITE_URL}/og.png`;
+    const head = [
+      `<title>${title}</title>`,
+      `<meta name="description" content="${description}"/>`,
+      `<link rel="canonical" href="${url}"/>`,
+      `<meta property="og:site_name" content="${escapeHtml(SITE_NAME)}"/>`,
+      `<meta property="og:title" content="${title}"/>`,
+      `<meta property="og:description" content="${description}"/>`,
+      `<meta property="og:type" content="website"/>`,
+      `<meta property="og:url" content="${url}"/>`,
+      `<meta property="og:image" content="${image}"/>`,
+      `<meta property="og:image:width" content="1200"/>`,
+      `<meta property="og:image:height" content="630"/>`,
+      `<meta name="twitter:card" content="summary_large_image"/>`,
+      `<meta name="twitter:title" content="${title}"/>`,
+      `<meta name="twitter:description" content="${description}"/>`,
+      `<meta name="twitter:image" content="${image}"/>`,
+      ...(meta.jsonLd ?? []).map(
+        (block: object) =>
+          `<script type="application/ld+json">${jsonForScript(block)}</script>`,
+      ),
+    ].join("");
+
     const html = template
-      .replace(/<title>.*?<\/title>/, `<title>${meta.title}</title>`)
-      .replace(
-        /<meta name="description" content="[^"]*"\s*\/>/,
-        `<meta name="description" content="${meta.description}"/>`,
-      )
-      .replace(
-        "</head>",
-        `<link rel="canonical" href="${SITE_URL}${path}"/><meta property="og:title" content="${meta.title}"/><meta property="og:description" content="${meta.description}"/><meta property="og:type" content="website"/><meta property="og:url" content="${SITE_URL}${path}"/><meta property="og:image" content="${SITE_URL}/og.png"/><meta property="og:image:width" content="1200"/><meta property="og:image:height" content="630"/></head>`,
-      )
-      .replace('<div id="root"></div>', `<div id="root">${rendered}</div>`);
-    const dir = resolve("dist", path.slice(1));
+      .replace("</head>", () => `${head}</head>`)
+      .replace('<div id="root"></div>', () => `<div id="root">${rendered}</div>`);
+    const dir = resolve(OUT_DIR, path.slice(1));
     await mkdir(dir, { recursive: true });
     await writeFile(resolve(dir, "index.html"), html);
   }
+
+  // Unknown addresses get this page (Vercel serves 404.html). App shows its not-found page for any path it does not know.
+  const notFound = renderToString(createElement(App, { initialPath: "/404/" }));
   await writeFile(
-    "dist/sitemap.xml",
-    `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${Object.keys(
-      routes,
-    )
-      .map((p) => `<url><loc>${SITE_URL}${p}</loc></url>`)
-      .join("")}</urlset>`,
+    resolve(OUT_DIR, "404.html"),
+    template
+      .replace(
+        "</head>",
+        () =>
+          `<title>Page not found — ${escapeHtml(SITE_NAME)}</title><meta name="robots" content="noindex"/></head>`,
+      )
+      .replace('<div id="root"></div>', () => `<div id="root">${notFound}</div>`),
+  );
+
+  await writeFile(
+    resolve(OUT_DIR, "sitemap.xml"),
+    `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${paths
+      .map((p) => `<url><loc>${escapeXml(SITE_URL + p)}</loc></url>`)
+      .join("")}</urlset>\n`,
   );
   await writeFile(
-    "dist/robots.txt",
+    resolve(OUT_DIR, "robots.txt"),
     `User-agent: *\nAllow: /\nSitemap: ${SITE_URL}/sitemap.xml\n`,
   );
-  console.log(`Prerendered ${Object.keys(routes).length} pages.`);
+  console.log(`Prerendered ${paths.length} pages into ${OUT_DIR}.`);
 } finally {
   await server.close();
 }

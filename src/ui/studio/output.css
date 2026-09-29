@@ -1,0 +1,283 @@
+/* OutputPanel and PrintGuide. Uses the studio's tokens; every class is prefixed op-. */
+.op {
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.5;
+  min-width: 0;
+}
+.op-title {
+  font-family: "Instrument Serif", Georgia, serif;
+  font-weight: 400;
+  font-size: 26px;
+  line-height: 1.1;
+  margin: 0 0 12px;
+}
+.op-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.op-tab {
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  margin-bottom: -1px;
+  padding: 9px 11px;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.op-tab:hover {
+  color: var(--ink);
+}
+.op-tab[aria-selected="true"] {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--accent);
+}
+.op-tab:focus-visible,
+.op-panel:focus-visible {
+  outline-offset: -3px;
+}
+.op-panel {
+  padding-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.op-summary {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.op-summary > div:not(.op-thumb) {
+  min-width: 0;
+}
+.op-count {
+  margin: 0;
+  font-weight: 600;
+  font-size: 14px;
+}
+.op-sub {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.op-thumb {
+  flex: none;
+  padding: 4px;
+  background: var(--stage);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.op-thumb canvas {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 128px;
+  max-height: 112px;
+  background: #fff;
+}
+.op-thumb[data-orientation="portrait"] canvas {
+  max-width: 76px;
+  max-height: 112px;
+}
+.op-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.op-field label,
+.op-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.op-select {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  font-size: 13px;
+}
+.op-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.op-seg-field {
+  flex: 1 1 130px;
+}
+.op-seg {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.op-seg button {
+  flex: 1;
+  min-height: 38px;
+  padding: 6px 8px;
+  background: var(--surface);
+  border: 0;
+  border-radius: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.op-seg button + button {
+  border-left: 1px solid var(--line);
+}
+.op-seg button[aria-pressed="true"] {
+  background: var(--soft);
+  color: var(--ink);
+  font-weight: 600;
+}
+.op-seg button:focus-visible {
+  outline-offset: -3px;
+}
+.op-more summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--muted);
+  padding: 2px 0;
+}
+.op-more[open] summary {
+  margin-bottom: 8px;
+}
+.op-facts {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.op-facts div {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 8px;
+}
+.op-facts dt {
+  color: var(--muted);
+  font-size: 12px;
+  padding-top: 1px;
+}
+.op-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.op-note,
+.op-gentle {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.op-gentle {
+  color: var(--ink);
+  border-left: 2px solid var(--sage);
+  padding-left: 10px;
+}
+.op-action {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.op-primary {
+  width: 100%;
+  min-height: 46px;
+  padding: 11px 16px;
+  background: var(--accent);
+  color: #fffaf1;
+  border: 1px solid var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+}
+.op-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+.dark .op-primary,
+:root[data-theme="dark"] .op-primary {
+  color: #16272c;
+}
+.op-disclaimer {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.op-alert {
+  margin: 0;
+  font-size: 13px;
+  padding: 9px 12px;
+  border: 1px solid var(--accent);
+  border-left-width: 3px;
+  border-radius: 4px;
+  background: var(--surface);
+}
+.op-status:empty,
+.op-status > :empty {
+  display: none;
+}
+.op-status p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.op-status .op-result {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.op-result strong {
+  font-size: 14px;
+}
+.op-result span {
+  color: var(--muted);
+}
+.op-guide {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.op-guide h3 {
+  font-family: "Instrument Serif", Georgia, serif;
+  font-weight: 400;
+  font-size: 22px;
+  line-height: 1.15;
+  margin: 0 0 8px;
+}
+.op-guide ol {
+  margin: 0 0 10px;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.op-guide-note {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.op-link {
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 500;
+}
+.op-link:hover {
+  color: var(--accent-hover);
+}
+.dark .op-link {
+  color: var(--accent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .op-tab,
+  .op-primary {
+    transition: color 0.12s, background-color 0.12s, border-color 0.12s;
+  }
+}

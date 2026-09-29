@@ -1,0 +1,263 @@
+/* Scoped to the static pages. Only tokens from styles.css are used. */
+.content-page.pg {
+  max-width: 940px;
+  margin-top: 40px;
+}
+.pg-crumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 0;
+  list-style: none;
+  margin: 0 0 30px;
+  padding: 0;
+  font-size: 12px;
+}
+.pg-crumbs li {
+  line-height: 1.6;
+  font-size: 12px;
+}
+.pg-crumbs li + li::before {
+  content: "/";
+  margin: 0 9px;
+  color: var(--line);
+}
+.pg-crumbs a {
+  color: var(--muted);
+}
+.pg-crumbs a:hover {
+  color: var(--accent);
+}
+.pg-crumbs span {
+  color: var(--ink);
+}
+.content-page.pg h1.pg-title {
+  font-size: clamp(38px, 5.6vw, 56px);
+  line-height: 1.08;
+  margin: 12px 0 22px;
+  text-wrap: balance;
+}
+.pg-lede {
+  max-width: 700px;
+  line-height: 1.75;
+}
+.pg-section {
+  margin-top: 46px;
+}
+.content-page.pg h2 {
+  font-size: clamp(28px, 3.6vw, 34px);
+  line-height: 1.15;
+  margin: 0 0 14px;
+}
+.content-page.pg h3 {
+  font-size: 15px;
+  line-height: 1.5;
+  margin: 0 0 6px;
+  color: var(--ink);
+}
+.content-page.pg p,
+.content-page.pg li {
+  line-height: 1.75;
+  font-size: 15px;
+  max-width: 720px;
+}
+.content-page.pg .pg-note {
+  font-size: 13px;
+  color: var(--muted);
+  border-left: 2px solid var(--accent);
+  padding: 2px 0 2px 14px;
+  margin: 20px 0;
+}
+.pg-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 20px;
+  margin: 26px 0 6px;
+}
+.pg-cta .primary {
+  text-decoration: none;
+}
+.pg-cta .pg-note {
+  margin: 0;
+}
+.pg-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 18px 0 8px;
+  font-size: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+.pg-table caption {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.35px;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 0 8px;
+  caption-side: top;
+}
+.pg-table th,
+.pg-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 11px 14px;
+  border-top: 1px solid var(--line);
+  line-height: 1.6;
+  color: var(--ink);
+  font-weight: 400;
+}
+.pg-spec th {
+  width: 30%;
+  color: var(--muted);
+  font-weight: 500;
+}
+.pg-list thead th {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-top: 0;
+  background: var(--soft);
+}
+.pg-list tbody th {
+  font-weight: 500;
+}
+.pg-list a,
+.pg-spec a {
+  color: var(--ink);
+}
+.pg-list a:hover {
+  color: var(--accent);
+}
+.pg-table-wrap {
+  overflow-x: auto;
+}
+.pg-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  font-style: normal;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.pg-rules,
+.pg-steps {
+  padding-left: 20px;
+  margin: 12px 0;
+}
+.pg-rules li,
+.pg-steps li {
+  margin-bottom: 6px;
+}
+.content-page.pg .pg-sources,
+.content-page.pg .pg-doclinks,
+.content-page.pg .pg-links {
+  list-style: none;
+  padding: 0;
+  margin: 12px 0;
+}
+.pg-sources li,
+.pg-doclinks li {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 9px 0;
+  border-top: 1px solid var(--line);
+}
+.pg-sources li:last-child,
+.pg-doclinks li:last-child {
+  border-bottom: 1px solid var(--line);
+}
+.pg-sources span,
+.pg-doclinks span {
+  font-size: 13px;
+  color: var(--muted);
+}
+.pg-sources a,
+.pg-doclinks a {
+  color: var(--ink);
+  font-weight: 500;
+}
+.pg-sources a:hover,
+.pg-doclinks a:hover {
+  color: var(--accent);
+}
+.pg-faq-item {
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+.pg-faq-item p {
+  margin: 0;
+}
+.pg-faq-item:last-child {
+  border-bottom: 1px solid var(--line);
+}
+.pg-country {
+  margin-top: 34px;
+}
+.pg-country h2 {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.pg-country h2 small {
+  font: 500 12px "DM Sans", sans-serif;
+  color: var(--muted);
+}
+.pg-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  margin: 14px 0;
+  font-size: 14px;
+}
+.pg-links a {
+  color: var(--ink);
+}
+.pg-links a:hover {
+  color: var(--accent);
+}
+.pg-tiers {
+  margin-top: 8px;
+}
+@media (max-width: 640px) {
+  .content-page.pg {
+    padding: 0 16px;
+    margin-top: 24px;
+  }
+  .pg-spec th,
+  .pg-spec td {
+    display: block;
+    width: auto;
+  }
+  .pg-spec th {
+    padding-bottom: 0;
+    font-size: 12px;
+  }
+  .pg-spec td {
+    border-top: 0;
+    padding-top: 2px;
+  }
+  .pg-list {
+    font-size: 13px;
+  }
+  .pg-list th,
+  .pg-list td {
+    padding: 9px 10px;
+  }
+}
+.content-page.pg .pg-prose h2 {
+  margin-top: 40px;
+}
+.content-page.pg .pg-prose h2:first-child {
+  margin-top: 8px;
+}
+.pg-tiers .support-tiers {
+  margin-top: 16px;
+}
