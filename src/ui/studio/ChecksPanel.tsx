@@ -1,4 +1,5 @@
-import { Check, Minus, TriangleAlert, X } from "lucide-react";
+import { useState, useSyncExternalStore } from "react";
+import { Check, ChevronDown, Minus, TriangleAlert, X } from "lucide-react";
 import type { DocumentSpec, MeasurementCheck, Preset } from "../../core/index";
 import type { PhotoCheck } from "../../core/analysis";
 import {
@@ -89,37 +90,55 @@ function StatusIcon({ status }: { status: string }) {
   return <Minus {...props} />;
 }
 
-export function ChecksPanel({
-  doc,
+/** The stacked phone layout. Below this width the measurement list folds away. */
+export const NARROW_QUERY = "(max-width: 760px)";
+function subscribeNarrow(notify: () => void) {
+  const query = window.matchMedia(NARROW_QUERY);
+  query.addEventListener("change", notify);
+  return () => query.removeEventListener("change", notify);
+}
+export function useNarrow(): boolean {
+  return useSyncExternalStore(
+    subscribeNarrow,
+    () => window.matchMedia(NARROW_QUERY).matches,
+    () => false,
+  );
+}
+
+/** The one-line result. On its own so the download can sit right under it on a phone. */
+export function Verdict({ summary }: { summary: Summary }) {
+  return (
+    <div className={`verdict ${summary.tone}`}>
+      <b className="serif">{summary.title}</b>
+      <p>{summary.detail}</p>
+    </div>
+  );
+}
+
+/** Every measured value with its allowed range. A folded section on a phone, open only when something needs a look. */
+export function CheckDetails({
   preset,
-  hasPhoto,
   measure,
   photoChecks,
   file,
   summary,
 }: {
-  doc?: DocumentSpec;
   preset: Preset;
-  hasPhoto: boolean;
   measure: MeasurementCheck[];
   photoChecks: PhotoCheck[];
   file: FileCheck[];
   summary: Summary;
 }) {
+  const narrow = useNarrow();
+  // Someone's own choice wins; until then it is open only when something needs a look.
+  const [chosen, setChosen] = useState<boolean | null>(null);
   const original = preset.mode === "original";
   const ordered = PHOTO_CHECK_ORDER.map((id) => photoChecks.find((c) => c.id === id)).filter(
     (c): c is PhotoCheck => !!c,
   );
-  return (
-    <section className="checks" aria-label="Checks">
-      <h2 className="visually-hidden">Checks</h2>
-      {hasPhoto && (
-        <div className={`verdict ${summary.tone}`}>
-          <b className="serif">{summary.title}</b>
-          <p>{summary.detail}</p>
-        </div>
-      )}
-      {hasPhoto && !original && measure.length > 0 && (
+  const body = (
+    <>
+      {!original && measure.length > 0 && (
         <div className="check-group" role="region" aria-label="Measurements">
           <h3>Measurements</h3>
           <ul className="check-list">
@@ -152,7 +171,7 @@ export function ChecksPanel({
           </ul>
         </div>
       )}
-      {hasPhoto && original && file.length > 0 && (
+      {original && file.length > 0 && (
         <div className="check-group" role="region" aria-label="File checks">
           <h3>File</h3>
           <ul className="check-list">
@@ -178,7 +197,7 @@ export function ChecksPanel({
           </ul>
         </div>
       )}
-      {hasPhoto && !original && (
+      {!original && (
         <div className="check-group" role="region" aria-label="Photo checks">
           <h3>Photo checks</h3>
           {ordered.length ? (
@@ -207,19 +226,44 @@ export function ChecksPanel({
           </p>
         </div>
       )}
-      <div className="check-group you-check">
-        <h3>{hasPhoto ? "You check" : "Before you take the photo"}</h3>
-        <ul>
-          {youCheck(doc).map((rule) => (
-            <li key={rule}>{rule}</li>
-          ))}
-        </ul>
-        <p className="fine-print">
-          {hasPhoto
-            ? "A tool cannot judge these. Check them against the rules link above."
-            : "These come from the rules linked on the left."}
-        </p>
-      </div>
+    </>
+  );
+  if (!narrow) return <section className="check-details" aria-label="Checks">{body}</section>;
+  const open = chosen ?? summary.failing > 0;
+  const label = original ? "File checks" : "Measurements and photo checks";
+  return (
+    <details
+      className="check-details check-fold"
+      open={open}
+      onToggle={(event) => setChosen(event.currentTarget.open)}
+    >
+      <summary>
+        <span>{label}</span>
+        {summary.failing > 0 && (
+          <em>{summary.failing === 1 ? "1 to look at" : `${summary.failing} to look at`}</em>
+        )}
+        <ChevronDown size={16} aria-hidden="true" />
+      </summary>
+      {body}
+    </details>
+  );
+}
+
+/** What only a person can judge: the document's own rules. */
+export function YouCheck({ doc, hasPhoto }: { doc?: DocumentSpec; hasPhoto: boolean }) {
+  return (
+    <section className="check-group you-check" aria-label={hasPhoto ? "You check" : "Before you take the photo"}>
+      <h3>{hasPhoto ? "You check" : "Before you take the photo"}</h3>
+      <ul>
+        {youCheck(doc).map((rule) => (
+          <li key={rule}>{rule}</li>
+        ))}
+      </ul>
+      <p className="fine-print">
+        {hasPhoto
+          ? "A tool cannot judge these. Check them against the rules link above."
+          : "These come from the rules linked on the left."}
+      </p>
     </section>
   );
 }

@@ -41,7 +41,7 @@ test('real CPU face assistance detects synthetic single/no/multiple faces and se
     pair.getContext('2d')!.drawImage(photo.image,0,0);pair.getContext('2d')!.drawImage(photo.image,photo.width,0);
     const twoFaces=await makePhoto(pair,'two-synthetic-faces.png');let multiFaceError='';
     try {await engine.autoCrop(twoFaces,preset);}catch(e){multiFaceError=String(e);}
-    const response={landmarks:assist.landmarks,width:photo.width,height:photo.height,noFaceError,multiFaceError,iou:intersection/union,foregroundFraction:foreground/(photo.width*photo.height)};
+    const maskAfter=engine.getBackgroundMask(photo);const response={face:assist.face,hasMask:!!maskAfter&&maskAfter.width>0,landmarks:assist.landmarks,width:photo.width,height:photo.height,noFaceError,multiFaceError,iou:intersection/union,foregroundFraction:foreground/(photo.width*photo.height)};
     for (const item of [photo,noFace,twoFaces])engine.releasePhoto(item);
     return response;
   });
@@ -53,6 +53,11 @@ test('real CPU face assistance detects synthetic single/no/multiple faces and se
   expect(Math.abs(result.landmarks.crownY - 428)).toBeLessThan(55);
   expect(Math.abs(result.landmarks.chinY - 1003)).toBeLessThan(55);
   expect(Math.abs(result.landmarks.eyesY - 716)).toBeLessThan(45);
+  // The detector's own face box (source px) and the cached mask come back for the analysis checks.
+  expect(result.hasMask).toBe(true);
+  expect(result.face.width).toBeGreaterThan(50);
+  expect(result.face.x + result.face.width / 2).toBeCloseTo(result.landmarks.centerX, 0);
+  expect(result.face.y + result.face.height).toBeCloseTo(result.landmarks.chinY, 0);
   expect(result.noFaceError).toMatch(/no clear face/i);
   expect(result.multiFaceError).toMatch(/more than one face/i);
   expect(result.iou).toBeGreaterThan(.90);

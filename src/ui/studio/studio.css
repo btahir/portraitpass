@@ -49,32 +49,49 @@
   font-size: 15px;
 }
 
-/* Three columns: steps and document, the photo, then checks and downloads. */
+/* Desktop: steps and document over the tools on the left, the photo in the middle, the verdict, download and checks on the right.
+   The DOM is already in phone order (document, photo, verdict and download, checks, tools), so nothing below reorders it. */
 .studio-grid {
   display: grid;
   grid-template-columns: 264px minmax(0, 1fr) 372px;
+  grid-template-rows: auto 1fr;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
   overflow: clip;
 }
-.col {
+.studio-top {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-width: 0;
+  padding: 20px 18px 18px;
+}
+.studio-tools {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+  padding: 0 18px 24px;
+}
+.studio-stage {
+  grid-column: 2;
+  grid-row: 1 / span 2;
   display: flex;
   flex-direction: column;
   min-width: 0;
-}
-.col-left {
-  padding: 20px 18px 24px;
-  gap: 18px;
-  border-right: 1px solid var(--line);
-}
-.col-center {
   background: var(--stage);
+  border-inline: 1px solid var(--line);
 }
-.col-right {
-  padding: 20px 20px 26px;
+.studio-side {
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  display: flex;
+  flex-direction: column;
   gap: 24px;
-  border-left: 1px solid var(--line);
+  min-width: 0;
+  padding: 20px 20px 26px;
 }
 
 /* Steps */
@@ -391,7 +408,8 @@
   align-self: flex-start;
   width: 100%;
   position: sticky;
-  top: 0;
+  /* The header scrolls away, so a small gap is all the stage needs. */
+  top: 16px;
 }
 .stage-toolbar {
   display: flex;
@@ -463,7 +481,8 @@
   margin-top: 10px;
 }
 .stage-canvas {
-  --maxh: min(66vh, 640px);
+  /* Keeps the whole stage (toolbar, photo, zoom, note) inside the viewport while it sticks. */
+  --maxh: clamp(300px, calc(100vh - 360px), 640px);
   display: flex;
   justify-content: center;
   padding: 22px 16px 12px;
@@ -602,11 +621,6 @@
   line-height: 1.45;
   color: var(--muted);
 }
-.checks {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-}
 .check-list {
   list-style: none;
   margin: 0;
@@ -681,6 +695,52 @@
   margin: 7px 0;
 }
 
+/* On a phone the measurements fold behind one line; the verdict and the download stay in view. */
+.check-fold {
+  border-block: 1px solid var(--line);
+}
+.check-fold > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 15px;
+  font-weight: 600;
+}
+.check-fold > summary::-webkit-details-marker {
+  display: none;
+}
+.check-fold > summary em {
+  font-style: normal;
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--warn);
+}
+.check-fold > summary svg {
+  margin-left: auto;
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+.check-fold[open] > summary svg {
+  transform: rotate(180deg);
+}
+.check-fold[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+.check-details {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.check-fold > .check-group {
+  margin-top: 14px;
+}
+.check-fold > .check-group:last-child {
+  margin-bottom: 14px;
+}
+
 /* Downloads */
 .output-slot {
   min-width: 0;
@@ -723,79 +783,57 @@
   margin-bottom: 10px;
 }
 
-/* One flow under 1180px: steps, document, photo, checks, downloads, then tools. */
+/* One flow under 1180px: document, photo, verdict and download, checks, then tools. */
 @media (max-width: 1180px) {
   .studio-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
     gap: 20px;
     border: 0;
     border-radius: 0;
     background: transparent;
     overflow: visible;
   }
-  .col {
-    display: contents;
+  .studio-top,
+  .studio-tools,
+  .studio-stage,
+  .studio-side {
+    grid-column: 1;
+    grid-row: auto;
+    padding: 0;
   }
-  .studio-grid > *,
-  .col > * {
-    grid-column: 1 / -1;
-    min-width: 0;
-  }
-  .steps {
+  .studio-top .steps {
     flex-direction: row;
     flex-wrap: wrap;
     gap: 4px 8px;
-    order: 1;
   }
-  .doc-card {
-    order: 2;
-  }
-  .col-left > p.fine-print {
-    order: 2;
-  }
-  .col-center > * {
-    order: 3;
-  }
-  .checks {
-    order: 4;
-  }
-  .output-slot {
-    order: 5;
-  }
-  .tools {
-    order: 6;
+  .studio-stage {
+    border: 1px solid var(--line);
+    border-radius: 8px;
   }
   .stage {
     position: static;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: var(--stage);
+  }
+  .stage-canvas {
+    --maxh: min(66vh, 640px);
   }
   .intake {
     margin: 0;
     max-width: none;
     background: var(--surface);
   }
-  .checks,
-  .output-slot,
-  .tools {
-    padding: 0;
+  .studio-side {
+    max-width: 760px;
   }
 }
 @media (min-width: 761px) and (max-width: 1180px) {
-  .checks {
-    grid-column: 1;
-  }
-  .output-slot {
-    grid-column: 2;
-  }
-  .tools {
+  .studio-tools {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 18px 28px;
     align-items: start;
   }
-  .tools > * + * {
+  .studio-tools > * + * {
     border-top: 0;
     padding-top: 0;
   }
@@ -814,9 +852,6 @@
   .doc-body:not(.show) {
     display: none;
   }
-  .studio-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .studio-title {
     font-size: 32px;
   }
@@ -825,6 +860,9 @@
   }
   .studio-head {
     padding: 16px 0 12px;
+  }
+  .studio-side {
+    gap: 16px;
   }
 }
 @media (max-width: 820px) {

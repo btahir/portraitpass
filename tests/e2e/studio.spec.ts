@@ -372,13 +372,15 @@ test('empty, loaded, light, dark and mobile studios have no serious accessibilit
   }
   await page.setViewportSize({ width: 390, height: 844 });
   expect(serious(await new AxeBuilder({ page }).analyze())).toEqual([]);
-  // Mobile order: the photo, then the checks, then the downloads.
+  // Mobile order: the photo, the verdict, the download, then the folded checks and the you-check list.
   const y = async (locator: ReturnType<Page['locator']>) => (await locator.boundingBox())!.y;
   const canvasY = await y(page.getByRole('img', { name: /^Framed photo/ }));
-  const checksY = await y(page.getByRole('region', { name: 'Checks', exact: true }));
+  const verdictY = await y(page.locator('.verdict'));
   const outputY = await y(page.getByRole('region', { name: 'Download', exact: true }));
-  expect(canvasY).toBeLessThan(checksY);
-  expect(checksY).toBeLessThan(outputY);
+  const foldY = await y(page.getByText('Measurements and photo checks', { exact: true }));
+  const youY = await y(page.getByText('You check', { exact: true }));
+  const toolsY = await y(page.getByRole('button', { name: 'Save project', exact: true }));
+  expect([canvasY, verdictY, outputY, foldY, youY, toolsY].every((v, i, all) => i === 0 || all[i - 1]! < v)).toBe(true);
   await page.getByRole('button', { name: 'Download print sheet', exact: true }).scrollIntoViewIfNeeded();
   await expect(page.getByRole('button', { name: 'Download print sheet', exact: true })).toBeEnabled();
   // The empty studio on a phone does not scroll sideways either.
@@ -404,4 +406,40 @@ test('home hands a photo, the sample and a chosen document to the studio', async
   await expect(page.getByRole('img', { name: /Framed photo/ })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole('contentinfo')).toContainText('not affiliated with or endorsed by any government or passport office');
   await expect(page.getByRole('contentinfo').getByRole('link', { name: 'Privacy', exact: true })).toBeVisible();
+});
+
+test('paper, layout and format chosen in the download panel drive the sheet preview and the saved project', async ({ page }) => {
+  await openStudio(page);
+  await upload(page, await geometryImage());
+  await page.getByLabel('Paper size', { exact: true }).selectOption('a4');
+  await page.getByLabel('Layout', { exact: true }).selectOption('cut-marks');
+  await page.getByRole('group', { name: 'File type' }).getByRole('button', { name: 'PDF' }).click();
+  await page.getByRole('group', { name: 'Resolution' }).getByRole('button', { name: '600 DPI' }).click();
+  await page.getByText('Paper orientation:', { exact: false }).click();
+  await page.getByLabel('Orientation', { exact: true }).selectOption('landscape');
+  await page.getByRole('button', { name: 'Sheet', exact: true }).click();
+  await expect(page.locator('.stage-foot')).toContainText('A4 sheet');
+  const saved = await saveProject(page);
+  expect(saved).toMatchObject({ paperId: 'a4', sheetStyle: 'cut-marks', sheetOrientation: 'landscape', format: 'pdf', dpi: 600, outputKind: 'sheet' });
+  // Open restores every one of them.
+  await page.getByRole('button', { name: 'Start over', exact: true }).click();
+  await page.getByLabel('Open a PortraitPass project', { exact: true }).setInputFiles({ name: 'p.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(saved)) });
+  await expect(page.getByLabel('Paper size', { exact: true })).toHaveValue('a4');
+  await expect(page.getByLabel('Layout', { exact: true })).toHaveValue('cut-marks');
+  await expect(page.getByRole('group', { name: 'File type' }).getByRole('button', { name: 'PDF' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('group', { name: 'Resolution' }).getByRole('button', { name: '600 DPI' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.stage-foot')).toContainText('A4 sheet');
+});
+
+test('Save project works for every DIY document, not only the classic presets', async ({ page }) => {
+  for (const id of ['us-visa', 'dv-lottery', 'in-oci']) {
+    await openStudio(page, id);
+    await upload(page, await geometryImage('png', 1600, 2000));
+    const saved = await saveProject(page);
+    expect(saved.presetId).toBe(id);
+    await page.getByRole('button', { name: 'Start over', exact: true }).click();
+    await page.getByLabel('Open a PortraitPass project', { exact: true }).setInputFiles({ name: 'p.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(saved)) });
+    await expect(page.getByRole('button', { name: 'Save project', exact: true })).toBeEnabled();
+    await expect(page).toHaveURL(new RegExp(`doc=${id}`));
+  }
 });

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
 import { PDFDocument } from 'pdf-lib';
-import { PRESETS,PAPERS,createProject,mmToPoints,outputSize,layoutSheet } from '../../src/core/index.js';
+import { PRESETS,PAPERS,createProject,mmToPoints,outputSize,layoutSheet,getPreset } from '../../src/core/index.js';
 import { renderBuffer,renderDigitalBuffer,saveFile,inspectFile,sourceForProject,loadProject } from '../../src/node/operations.js';
 const fixture=()=>sharp({create:{width:1200,height:1600,channels:3,background:'#99aacc'}}).jpeg({quality:95}).toBuffer();
 test('every print preset and image format produces exact dimensions and 300 DPI',async()=>{const bytes=await fixture();for(const preset of PRESETS.filter(p=>p.mode!=='original'))for(const format of ['jpeg','png']as const){const p=createProject({name:'synthetic.jpg',mime:'image/jpeg',width:1200,height:1600},preset.id);p.format=format;const out=await renderBuffer(bytes,p);const meta=await sharp(out.bytes).metadata();assert.equal(meta.width,outputSize(preset).width);assert.equal(meta.height,outputSize(preset).height);assert.equal(meta.density,300);}});
@@ -192,4 +192,16 @@ test('edge-to-edge raster sheet: photos tile from the corner and guides sit on s
   assert.equal(out.details.count,6);assert.equal((out.details.layout as {style:string}).style,'edge-to-edge');
   // Cut-marks style keeps white margins.
   p.sheetStyle='cut-marks';const cm=await renderBuffer(bytes,p,true);const raw=await sharp(cm.bytes).removeAlpha().raw().toBuffer({resolveWithObject:true});assert.deepEqual([...raw.data.subarray(0,3)],[255,255,255]);
+});
+test('document ids from the dataset work through the Node renderer',async()=>{
+  const bytes=await fixture();
+  for(const id of ['us-visa','dv-lottery','in-oci']){
+    const p=createProject({name:'a.jpg',mime:'image/jpeg',width:1200,height:1600},id);
+    if(p.format==='original')continue;
+    const out=await renderBuffer(bytes,p);
+    const meta=await sharp(out.bytes).metadata();
+    const preset=getPreset(id);
+    assert.equal(meta.width,outputSize(preset).width,id);
+    assert.equal(meta.height,outputSize(preset).height,id);
+  }
 });

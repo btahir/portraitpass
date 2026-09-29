@@ -1,5 +1,5 @@
 import { Info, Minus, Plus, RotateCcw, ScanFace, TriangleAlert, Undo2, Check } from "lucide-react";
-import type { Crop, Landmarks, Preset } from "../../core/index";
+import type { Crop, Landmarks, Preset, SheetOrientation, SheetStyle } from "../../core/index";
 import { PAPERS } from "../../core/index";
 import type { LoadedPhoto } from "../../browser/engine";
 import { FACE_NOTICE } from "../../config";
@@ -20,6 +20,8 @@ export interface StageProps {
   background?: string;
   view: StageView;
   paperId: string;
+  sheetStyle: SheetStyle;
+  sheetOrientation: SheetOrientation;
   baseCrop: Crop | null;
   zoom: number;
   busy: boolean;
@@ -46,7 +48,11 @@ export interface StageProps {
 export function Stage(p: StageProps) {
   const original = p.preset.mode === "original";
   const framing = !original && p.view === "frame";
-  const sheet = p.view === "sheet" && !original ? previewSheet(p.preset, p.paperId) : undefined;
+  const sheet = p.view === "sheet" && !original ? previewSheet(p.preset, p.paperId, {
+        style: p.sheetStyle,
+        orientation: p.sheetOrientation,
+      })
+      : undefined;
   const paper = PAPERS.find((x) => x.id === p.paperId);
   const view: StageView = original ? "frame" : p.view === "sheet" && !sheet ? "frame" : p.view;
   return (
@@ -144,6 +150,8 @@ export function Stage(p: StageProps) {
           background={p.background}
           view={view}
           paperId={p.paperId}
+          sheetStyle={p.sheetStyle}
+          sheetOrientation={p.sheetOrientation}
           interactive={framing && !p.busy && !p.photo.bytesOnly}
           baseCrop={p.baseCrop}
           onLive={p.onLive}

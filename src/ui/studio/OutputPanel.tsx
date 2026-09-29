@@ -43,14 +43,37 @@ export interface OutputPanelProps {
   checksSummary: { failing: number; unknown: number };
   /** Called after a successful download so the studio can show the tips ask. */
   onExported(kind: OutputKind): void;
-  /** Optional: open on this tab when it exists for the document. */
-  initialTab?: OutputKind;
+  /** Paper, layout, file type and tab. Held by the studio so the sheet preview and saved projects share them. */
+  state: OutputState;
+  onState(patch: Partial<OutputState>): void;
   /** Optional: heading level for the panel title (default 2). */
   headingLevel?: 2 | 3;
 }
 
-type SheetFormat = "jpeg" | "pdf";
-type SingleFormat = "jpeg" | "png" | "pdf";
+export type SheetFormat = "jpeg" | "pdf";
+export type SingleFormat = "jpeg" | "png" | "pdf";
+
+/** Everything the person chose in the download panel. Lives in the studio, not in the panel. */
+export interface OutputState {
+  /** The tab picked so far; undefined until someone picks one. See `effectiveTab`. */
+  tab?: OutputKind;
+  paperId: string;
+  style: SheetStyle;
+  orientation: SheetOrientation;
+  sheetFormat: SheetFormat;
+  sheetDpi: number;
+  singleFormat: SingleFormat;
+  singleDpi: number;
+}
+export const DEFAULT_OUTPUT: OutputState = {
+  paperId: "4x6",
+  style: "edge-to-edge",
+  orientation: "auto",
+  sheetFormat: "jpeg",
+  sheetDpi: 300,
+  singleFormat: "jpeg",
+  singleDpi: 300,
+};
 
 const TAB_LABEL: Record<OutputKind, string> = {
   sheet: "Print sheet",
@@ -71,7 +94,7 @@ const MIME_LABEL: Record<string, string> = {
   "image/webp": "WebP",
 };
 
-function tabsFor(
+export function tabsFor(
   doc: DocumentSpec | undefined,
   preset: Preset,
   target: DigitalTarget | undefined,
@@ -84,6 +107,18 @@ function tabsFor(
   return tabs;
 }
 
+/** The tab the panel shows: the picked one when this document has it, else the first. */
+export function effectiveTab(
+  doc: DocumentSpec | undefined,
+  preset: Preset,
+  picked: OutputKind | undefined,
+): OutputKind {
+  const tabs = tabsFor(doc, preset, doc ? documentDigitalTarget(doc) : undefined);
+  return picked && tabs.includes(picked) ? picked : tabs[0]!;
+}
+export const defaultStyle = (paperId: string): SheetStyle =>
+  paperId === "4x6" ? "edge-to-edge" : "cut-marks";
+
 function messageOf(e: unknown) {
   return e instanceof Error ? e.message : "The download failed. Try again.";
 }
@@ -92,8 +127,6 @@ function codeOf(e: unknown) {
 }
 const oneDecimal = (n: number) => Math.round(n * 10) / 10;
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
-const defaultStyle = (paperId: string): SheetStyle =>
-  paperId === "4x6" ? "edge-to-edge" : "cut-marks";
 
 function formatBytes(bytes: number, unit: 1000 | 1024) {
   if (bytes >= unit * unit) return `${oneDecimal(bytes / unit / unit)} MB`;
@@ -158,23 +191,23 @@ export function OutputPanel({
   background,
   checksSummary,
   onExported,
-  initialTab,
+  state,
+  onState,
   headingLevel = 2,
 }: OutputPanelProps) {
   const uid = useId();
   const target = doc ? documentDigitalTarget(doc) : undefined;
   const tabs = tabsFor(doc, preset, target);
-  const [picked, setPicked] = useState<OutputKind | undefined>(initialTab);
   const tab: OutputKind =
-    picked && tabs.includes(picked) ? picked : tabs[0];
-
-  const [paperId, setPaperId] = useState("4x6");
-  const [style, setStyle] = useState<SheetStyle>("edge-to-edge");
-  const [orientation, setOrientation] = useState<SheetOrientation>("auto");
-  const [sheetFormat, setSheetFormat] = useState<SheetFormat>("jpeg");
-  const [sheetDpi, setSheetDpi] = useState(300);
-  const [singleFormat, setSingleFormat] = useState<SingleFormat>("jpeg");
-  const [singleDpi, setSingleDpi] = useState(300);
+    state.tab && tabs.includes(state.tab) ? state.tab : tabs[0]!;
+  const { paperId, style, orientation, sheetFormat, sheetDpi, singleFormat, singleDpi } = state;
+  const setPicked = (kind: OutputKind) => onState({ tab: kind });
+  const setStyle = (v: SheetStyle) => onState({ style: v });
+  const setOrientation = (v: SheetOrientation) => onState({ orientation: v });
+  const setSheetFormat = (v: SheetFormat) => onState({ sheetFormat: v });
+  const setSheetDpi = (v: number) => onState({ sheetDpi: v });
+  const setSingleFormat = (v: SingleFormat) => onState({ singleFormat: v });
+  const setSingleDpi = (v: number) => onState({ singleDpi: v });
 
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<Done | null>(null);
@@ -410,9 +443,11 @@ export function OutputPanel({
                 disabled={busy}
                 onChange={(event) => {
                   const id = event.target.value;
-                  setPaperId(id);
-                  setStyle(defaultStyle(id));
-                  setSheetFormat(id === "4x6" ? "jpeg" : "pdf");
+                  onState({
+                    paperId: id,
+                    style: defaultStyle(id),
+                    sheetFormat: id === "4x6" ? "jpeg" : "pdf",
+                  });
                 }}
               >
                 {PAPERS.map((p) => (

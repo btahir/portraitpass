@@ -6,42 +6,45 @@ PortraitPass is an independent open-source project, not affiliated with or endor
 
 The website is the product. The CLI and MCP server below are thin extras for AI assistants working on local files. There is no npm package; clone the repository and run pnpm install.
 
+## What the site does
+- 49 documents (passports, visas, ID and residence cards, a lottery, exam forms; 22 countries and regions), each with its source URL and check date. One page per document at /<id>-photo/, for example /us-passport-photo/, /dv-lottery-photo/, /in-oci-photo/. Index: /documents/.
+- Auto-framing on the device, live measurements (head height, eye line, centring, resolution) and measure-only photo checks (background, shadow, lighting, exposure, sharpness).
+- Print sheets: 6-up 4x6 edge to edge (about 40 cents at a pharmacy photo counter; prices vary), A4 and Letter with cut marks. Exact pixel and KB JPEG export for upload forms. Original file passthrough where a form wants the untouched photo. Camera capture with hints.
+- Guides: /print-passport-photos/, /passport-photo-print-sheet/, /2x2-photo/, /35x45-photo/, /600x600-photo/, /photo-under-50kb/.
+- 14 of the 49 documents are marked not DIY (photographer, booth, certified provider or office required). They have no preset. Tell the person why; do not substitute another document.
+
 ## Agent interfaces
 - Core: TypeScript exports from src/core/index.ts.
-- CLI: ./scripts/portraitpass presets --json; ./scripts/portraitpass inspect --input /path/photo.jpg --json.
+- CLI: ./scripts/portraitpass with presets, inspect, crop, render, sheet, digital, project, layout. Always pass --json. Example: ./scripts/portraitpass inspect --input /path/photo.jpg --preset us-passport --json.
 - Render: ./scripts/portraitpass render --input /path/photo.jpg --preset us-passport --output /path/photo-sized.png --json. The format is inferred from the output extension (.jpg, .png, .pdf); a conflicting --format or an unsupported extension is an error (FORMAT_EXTENSION_MISMATCH).
-- Sheet: ./scripts/portraitpass sheet --input /path/photo.jpg --preset uk-passport --paper 4x6 --output /path/sheet.pdf --json.
+- Sheet: ./scripts/portraitpass sheet --input /path/photo.jpg --preset uk-passport --paper 4x6 --output /path/sheet.pdf --json. Layout flags: --layout edge-to-edge|cut-marks (default edge-to-edge on 4x6, cut-marks on A4 and Letter) and --orientation auto|portrait|landscape (auto picks the direction that fits more photos).
+- Digital: ./scripts/portraitpass digital --input /path/photo.jpg --preset dv-lottery --width 600 --height 600 --max-kb 240 --kb-bytes 1000 --output /path/dv.jpg --json. One JPEG at exact pixels inside the KB range; never enlarges. Fails with LOW_RESOLUTION, FILE_SIZE_UNREACHABLE or ORIGINAL_ONLY. Take the numbers from the document's digital spec in the dataset.
 - Browser handoff: ./scripts/portraitpass project --input /path/photo.jpg --preset uk-passport --embed --output /path/handoff.portraitpass.json --json.
-- MCP stdio: /absolute/path/to/portraitpass/scripts/portraitpass-mcp after pnpm install. Use the direct wrapper, not package-manager lifecycle commands, to keep stdout clean. Tools: portraitpass_presets, portraitpass_inspect, portraitpass_crop, portraitpass_layout, portraitpass_render, portraitpass_sheet, portraitpass_project. MCP paths must be absolute.
-- render and sheet results include checks (head, eyes, centre, resolution measurements: pass, fail or unknown), a warnings array and backgroundReplaced. Head height and eye line are measurements, not blockers: a fail adds a warning and the file is still written. Relay warnings to the person.
+- MCP stdio: /absolute/path/to/portraitpass/scripts/portraitpass-mcp after pnpm install. Use the direct wrapper, not package-manager lifecycle commands, to keep stdout clean. Tools: portraitpass_presets, portraitpass_inspect, portraitpass_crop, portraitpass_layout, portraitpass_render, portraitpass_sheet, portraitpass_digital, portraitpass_project. MCP paths must be absolute. Sheet options are sheetStyle and sheetOrientation; digital takes widthPx, heightPx, minKB, maxKB, kbBytes.
+- render, sheet and digital results include checks (head, eyes, centre, resolution measurements: pass, fail or unknown) and a warnings array; render and sheet add backgroundReplaced; digital adds fileChecks, bytes, kb, quality and padded. Head height and eye line are measurements, not blockers: a fail adds a warning and the file is still written. Relay warnings to the person.
 - Exit codes: 0 ok, 1 internal, 2 invalid command or data, 3 input problem (including ORIGINAL_NOT_ACCEPTED, which lists issues), 4 output problem (exists, cannot write, would overwrite source or project). Errors are JSON: {"ok":false,"error":{"code","message"}}.
+- Photo analysis (background evenness, shadow and colour, lighting, exposure, sharpness) is measure-only and never edits a photo. It is a library function (analyzePhoto in src/core/analysis.ts, analyzeFile in src/node/analysis.ts), not a CLI or MCP command yet.
 - Full schema, examples and safety semantics: docs/agent-guide.md in the repository.
 
-## Presets
-us-passport, uk-passport, au-passport: print preparation only, sized to the published dimensions. general-id: custom dimensions and optional background replacement. us-online, uk-online: return the original bytes unchanged; never crop or edit; they fail with ORIGINAL_NOT_ACCEPTED (exit 3) if the file breaks the size, resolution or type limits, and the output extension must match the source type; us-online also passes HEIC and HEIF through; HEIC/HEIF are refused for every other preset (UNSUPPORTED_IMAGE), including when saving a project. Papers: 4x6, a4, letter. Default 300 DPI. All coordinates use oriented source pixels.
+## Presets and document ids
+presets --json lists six original presets: us-passport, uk-passport, au-passport (print preparation only, sized to the published dimensions), general-id (custom dimensions, optional background replacement), us-online and uk-online (return the original bytes unchanged; never crop or edit; they fail with ORIGINAL_NOT_ACCEPTED, exit 3, if the file breaks the size, resolution or type limits).
 
-Each preset lists its source URL, check date, background-edit rule and notes. Tell the person the notes:
-- US passport: someone else takes the photo, or use a tripod. No selfies.
-- UK passport print: professionally printed, not cut down from a larger picture. For online applications use uk-online.
+Any dataset document id that can be made at home also works as --preset, presetId or a project's presetId (35 of the 49), for example us-visa, dv-lottery, in-oci, schengen-visa, ie-passport, nl-passport, au-visa, cn-visa, jp-visa, kr-visa. Ids of not-DIY documents fail with INVALID_PRESET. Papers: 4x6, a4, letter. Default 300 DPI. All coordinates use oriented source pixels. HEIC and HEIF are accepted only for original passthrough of the US online renewal; other presets refuse them (UNSUPPORTED_IMAGE).
+
+Notes to tell the person:
+- US passport: someone else takes the photo, or use a tripod. No selfies. No software, filter or AI changes.
+- UK passport print: professionally printed, not cut down from a larger picture. For online applications use uk-online (original bytes).
 - Australia passport: print at a photo lab, dye-sublimation glossy paper of at least 200 gsm.
+- Background replacement never edits a face. It is off by default where the rules forbid altered photos and warns when turned on; outputs that use it carry the metadata note "Background replaced with PortraitPass".
 
-Not DIY, so no preset: Canadian passport (commercial photographer required) and German passport or ID card (digital photo via the authority or a certified provider since 1 May 2025). They are in the core library as DOCUMENT_NOTICES but the CLI and MCP presets list does not include them. Tell the person; do not substitute another preset.
-
-Background replacement works for print and general presets, never for original modes. It is off by default for US, UK and Australia passports because their rules forbid altered photos. Outputs that use it carry the metadata note "Background replaced with PortraitPass".
+## The dataset
+Open MIT dataset of photo specs: src/core/documents.ts (types and DOCUMENTS), entries in src/core/data/us.ts, south-asia.ts, europe.ts, world.ts. Each entry: id, name, country, countryCode, kind, diy (yes, digital-only, no), diyNote, print (mm size, head range, eye range measured up from the bottom edge, paper), digital (pixel and KB limits, kbBytes 1000 or 1024, formats, originalOnly), background (colours, edit: forbidden or unspecified), rules, sources (URL, title, checkedAt, primary or secondary) and searchTerms. Numbers come from the issuing authority's own pages and forms with a check date. Some authority sites block automated fetches, so parts of some entries come from search-result text on the authority's domain; treat every entry as needing a re-check against the live page before you rely on it. Rules change: re-check monthly, update the number and checkedAt together, run pnpm test. Errors: open an issue with the source link.
 
 ## Privacy and limits
-Your photo never leaves your device. No external calls, keys, cookies, analytics or third-party scripts; fonts and models are self-hosted. The host (Vercel) logs request data such as IP addresses, separately from photos. Sources: single-frame JPEG/PNG/WebP (HEIC/HEIF only for the us-online original passthrough), at most 20 MiB and 40 megapixels. Portable project version 1: JSON with source data URL, crop, presetId, dpi, paperId, format, optional landmarks (saved only when set) and background settings (the mask is kept only while background replacement is on); max 60 MiB. Project files contain the photo, settings, head positions if set, and the background mask only while background replacement is on, so share them deliberately. Outputs require explicit paths, no overwrite by default; source and project files are always protected.
+Your photo never leaves your device. No external calls, keys, cookies, analytics or third-party scripts; fonts and models are self-hosted. The host (Vercel) logs request data such as IP addresses, separately from photos. Sources: single-frame JPEG/PNG/WebP (HEIC/HEIF only for the us-online original passthrough), at most 20 MiB and 40 megapixels. Portable project version 1: JSON with source data URL, crop, presetId, dpi, paperId, sheetStyle, sheetOrientation, format, optional landmarks (saved only when set) and background settings (the mask is kept only while background replacement is on); max 60 MiB. Project files contain the photo, settings, head positions if set, and the mask only while background replacement is on, so share them deliberately. Outputs require explicit paths, no overwrite by default; source and project files are always protected.
 
 ## Site pages
-/privacy/, /terms/, /accessibility/, /support/ (optional tips, nothing is unlocked).
+/, /studio/, /documents/, /about/, /privacy/, /terms/, /accessibility/, /support/ (optional tips; nothing is unlocked). The site can be installed and works offline after the first visit (in progress; see src/pwa.ts).
 
 ## Source rules
-- US print: https://travel.state.gov/en/passports/apply/help/photos.html
-- US online renewal: https://travel.state.gov/en/passports/renew-replace/online/upload-digital-photo.html
-- UK print: https://www.gov.uk/photos-for-passports/photo-requirements
-- UK online: https://www.gov.uk/photos-for-passports
-- Australia: https://www.passports.gov.au/help/passport-photos
-- Canada (photographer required): https://www.canada.ca/en/immigration-refugees-citizenship/services/canadian-passports/photos.html
-- Germany (digital photos): https://www.bmi.bund.de/SharedDocs/kurzmeldungen/DE/2025/04/neue-passbilder.html
-
-Geometric measurements do not decide acceptance. The person must check likeness, lighting, expression, recency and the destination's current rules.
+Each document's page lists its source URLs and check date (for example travel.state.gov for US passports, gov.uk for UK photos, passports.gov.au for Australia, canada.ca for Canada). Geometric measurements do not decide acceptance. The person must check likeness, lighting, expression, recency and the destination's current rules.

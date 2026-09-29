@@ -2,7 +2,7 @@
 
 PortraitPass original code and vector identity: MIT. No rival source code is incorporated.
 
-PortraitPass is an independent open-source project, not affiliated with or endorsed by any government or passport office. Document dimensions come from each authority's published guidance, cited by URL in the presets; citing a source is attribution, not endorsement. No government seals, emblems or styling are used.
+PortraitPass is an independent open-source project, not affiliated with or endorsed by any government or passport office. Document dimensions come from each authority's published guidance, cited by URL in the dataset; citing a source is attribution, not endorsement. No government seals, emblems or styling are used.
 
 ## Synthetic demo portraits
 All demo images depict fictional adults; none is a real person and no personal photograph, brand or logo was used. They are demonstration material, not suitable for an identity application. Each is generated with Codex image_gen (OpenAI's built-in image generation tool) on 2026-09-28, is ours under the project license (MIT) and depicts no real person. Originals are 1024×1536; the PNGs are palette-optimized copies and the 768px WebPs are optimized derivatives of the same generated assets.
@@ -10,6 +10,9 @@ All demo images depict fictional adults; none is a real person and no personal p
 - `public/demo-portrait.png` / `.webp` (replaces the earlier tightly framed demo). Prompt: photorealistic studio-quality passport-style photo of one fictional adult man in his early 30s, light-tan skin, short neat brown hair, gray crewneck sweater, facing the camera straight on, neutral friendly expression, mouth closed, eyes open, no glasses, even soft frontal lighting with no shadows, plain off-white wall, head and shoulders with generous space (head about 40-45% of image height, clear space above and on both sides), portrait 2:3, sharp focus, no text or watermark.
 - `public/demo-shadow.png` / `.webp`. Prompt: photorealistic casual at-home snapshot in passport-style of one fictional adult woman in her late 40s, fair skin, shoulder-length gray-streaked auburn hair, dark green top, facing the camera, neutral expression, slightly beige wall with a visible soft shadow on the left side and slightly uneven lighting, generous head-and-shoulders framing, portrait 2:3, no text or watermark. Used to demonstrate the background and lighting checks; deliberately not ideal.
 - `public/demo-portrait-2.png` / `.webp`. Prompt: photorealistic studio-quality passport-style photo of one fictional adult woman in her early 60s, dark brown skin, short cropped gray hair, burgundy crewneck top, no glasses, facing the camera, neutral friendly expression, even soft frontal lighting, plain off-white wall, generous head-and-shoulders framing, portrait 2:3, no text or watermark. Used for variety in marketing images.
+
+## Photo-spec dataset and its sources
+The 49 entries in `src/core/documents.ts` and `src/core/data/` are PortraitPass's own selection and wording, MIT licensed. The facts in them (photo sizes, head and eye ranges, file-size and pixel limits, background colours, editing rules) are published requirements from the issuing authorities, for example the US Department of State and USCIS, GOV.UK, the Australian Passport Office, the Government of Canada, the Indian passport, visa and OCI services, NADRA in Pakistan, the Irish, New Zealand and Dutch authorities, and the visa and passport services of Bangladesh, Nepal, Sri Lanka, China, Japan, South Korea, the Philippines, South Africa and the UAE. Each entry links to the page it came from with the date it was checked. They are cited as sources only: none of these bodies has reviewed, approved or endorsed PortraitPass or this dataset, and none of their seals, emblems, logos or styling is used. Several authority sites block automated fetches, so parts of some entries were read from search-result text on the authority's own domain; the evidence is kept in the maintainer's notes and every entry should be re-checked against the live page before use.
 
 ## Local on-device models
 - MediaPipe Tasks Vision runtime, Apache-2.0: https://github.com/google-ai-edge/mediapipe/blob/master/LICENSE
@@ -19,6 +22,9 @@ Models, runtime, fonts and application assets are self-hosted and served as stat
 
 ## Fonts and libraries
 DM Sans and Instrument Serif: SIL Open Font License 1.1; bundled through Fontsource with their license notices. React, Vite, TypeScript, pdf-lib, MCP SDK and Zod: MIT. Lucide icons: ISC. Sharp: Apache-2.0; its unmodified libvips native dependency is LGPL-3.0-or-later (installed prebuilt package) and remains independently replaceable. License inventory is generated from installed dependencies before release; see THIRD_PARTY_NOTICES.md.
+
+## Icons and social card
+The favicon, PWA icons (`public/icons/`, made by `scripts/make-icons.ts`) and the social card (`public/og.svg` and `public/og.png`, made by `scripts/make-og.ts`) are original PortraitPass artwork, MIT. The card's text is drawn as outlines of DM Sans and Instrument Serif (SIL OFL 1.1). Its 4×6 sheet mock uses simple shapes, no photographs and no real or generated faces.
 
 ## Product and launch visuals
 Screenshots and animated WebP demonstrations show this original app using the synthetic portrait above. The original vector social card also has a 1200×630 PNG rendition. The local launch film uses an original procedural instrumental score, without samples or a generative music model. Editable film sources, audio provenance and asset hashes are retained in the ignored `docs/launch/media/` folder. Its launch-only GSAP runtime uses the GSAP Standard License and is not included in the application dependency tree or bundle.

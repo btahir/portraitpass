@@ -38,6 +38,15 @@ function isProjectFile(file: File) {
 const hasFiles = (e: DragEvent) =>
   Array.from(e.dataTransfer?.types ?? []).includes("Files");
 
+const NO_HOME_FIRST = [
+  "ca-passport",
+  "de-passport",
+  "in-passport",
+  "fr-passport",
+  "ca-pr",
+  "us-naturalization",
+];
+
 export function Home({ onUpload, onCamera, onSample, onOpenProject }: HomeProps) {
   const [docId, setDocId] = useState<string | undefined>();
   const [dragging, setDragging] = useState(false);
@@ -74,6 +83,11 @@ export function Home({ onUpload, onCamera, onSample, onOpenProject }: HomeProps)
 
   const popular = popularDocuments();
   const noHome = DOCUMENTS.filter(notDiy);
+  // The most searched first; the rest are one link away on the documents index.
+  const noHomeShown = NO_HOME_FIRST.map((id) => noHome.find((d) => d.id === id))
+    .filter((d): d is (typeof noHome)[number] => !!d)
+    .concat(noHome.filter((d) => !NO_HOME_FIRST.includes(d.id)))
+    .slice(0, 6);
 
   const pickFile = (file: File | undefined) => {
     if (!file) return;
@@ -333,13 +347,18 @@ export function Home({ onUpload, onCamera, onSample, onOpenProject }: HomeProps)
             providers. Each page explains what to do instead.
           </p>
           <ul className="hm-docs hm-docs--why">
-            {noHome.map((d) => (
+            {noHomeShown.map((d) => (
               <li key={d.id}>
                 <a href={docPagePath(d)}>{d.name}</a>
                 <span>{firstSentence(d.diyNote ?? "")}</span>
               </li>
             ))}
           </ul>
+          {noHome.length > noHomeShown.length && (
+            <p className="hm-more">
+              <a href="/documents/">See all {noHome.length}</a>
+            </p>
+          )}
         </div>
       </section>
 

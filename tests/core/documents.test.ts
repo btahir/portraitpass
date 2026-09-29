@@ -277,3 +277,64 @@ test("searchDocuments finds OCI, Schengen and the US passport", () => {
   assert(searchDocuments("2x2 passport").some((d) => d.id === "us-passport"));
   assert.deepEqual(searchDocuments("   "), []);
 });
+
+// ---------------------------------------------------------------- project files for every DIY document
+
+import {
+  createProject,
+  parseProject,
+  projectPreset,
+  validateProject,
+} from "../../src/core/project.js";
+
+test("getPreset resolves dataset document ids; legacy presets stay authoritative", () => {
+  for (const id of ["us-visa", "dv-lottery", "in-oci"]) {
+    assert.equal(getPreset(id).id, id);
+  }
+  assert.throws(() => getPreset("no-such-document"), { code: "INVALID_PRESET" });
+  // Not-DIY documents have no preset, so they never resolve.
+  const notDiy = DOCUMENTS.find((d) => d.diy === "no");
+  if (notDiy) assert.throws(() => getPreset(notDiy.id), { code: "INVALID_PRESET" });
+  // us-passport exists in both places; the legacy preset wins, exactly.
+  assert.equal(getPreset("us-passport").headMaxMm, 34.925);
+  assert.equal(getPreset("us-online").mode, "original");
+});
+
+test("every DIY document id makes a valid project that round-trips", () => {
+  each((d) => {
+    const preset = documentPreset(d);
+    if (!preset) return;
+    const p = createProject({ name: "a.jpg", mime: "image/jpeg", width: 2400, height: 3200 }, d.id);
+    p.sheetStyle = "cut-marks";
+    p.sheetOrientation = "landscape";
+    p.paperId = "a4";
+    p.dpi = 600;
+    if (preset.mode !== "original") {
+      p.format = "pdf";
+      p.outputKind = "sheet";
+    }
+    const result = validateProject(p);
+    assert(result.valid, JSON.stringify(result.issues));
+    const back = parseProject(JSON.stringify(p));
+    assert.equal(back.presetId, d.id);
+    assert.equal(projectPreset(back).id, d.id);
+    if (preset.mode !== "original") {
+      assert.equal(back.paperId, "a4");
+      assert.equal(back.sheetStyle, "cut-marks");
+      assert.equal(back.sheetOrientation, "landscape");
+      assert.equal(back.outputKind, "sheet");
+      assert.equal(back.format, "pdf");
+      assert.equal(back.dpi, 600);
+    }
+  });
+});
+
+test("named document ids (us-visa, dv-lottery, in-oci) validate; unknown ids do not", () => {
+  for (const id of ["us-visa", "dv-lottery", "in-oci", "us-passport-online"]) {
+    const p = createProject({ name: "a.jpg", mime: "image/jpeg", width: 2400, height: 3200 }, id);
+    assert.equal(validateProject(p).valid, true, id);
+    assert.equal(parseProject(JSON.stringify(p)).presetId, id);
+  }
+  const p = createProject({ name: "a.jpg", mime: "image/jpeg", width: 2400, height: 3200 });
+  assert.equal(validateProject({ ...p, presetId: "made-up" }).valid, false);
+});

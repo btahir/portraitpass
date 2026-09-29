@@ -6,7 +6,6 @@ import {
   type Landmarks,
   type Preset,
 } from "../../core/index";
-import type { AnalysisBox } from "../../core/analysis";
 
 /** Only width and height ever come from the custom size. */
 export function withCustomSize(
@@ -83,22 +82,6 @@ export function roughLandmarks(width: number, height: number): Landmarks {
     crownY: height * 0.18,
     eyesY: height * 0.36,
     chinY: height * 0.63,
-  };
-}
-
-/**
- * The face box is the part of the face the detector boxes: forehead to chin. The engine returns head
- * positions, so this estimates the box from eyes and chin (eyes sit about 40% down the box). It only
- * steers the lighting, exposure and sharpness checks, which look at the face patch.
- */
-export function faceBoxFromLandmarks(l: Landmarks): AnalysisBox {
-  const height = (l.chinY - l.eyesY) / 0.6;
-  const width = height * 0.85;
-  return {
-    x: l.centerX - width / 2,
-    y: l.chinY - height,
-    width,
-    height,
   };
 }
 

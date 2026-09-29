@@ -1,8 +1,10 @@
 # PortraitPass for agents
 
-PortraitPass runs entirely on the local machine. No API key, external model, upload or server is needed for the core, CLI or MCP. The website is the product; the CLI and MCP server are thin extras for AI assistants working on local files. The browser provides human review and an optional local segmentation mask. We check sizes and positions; the issuing authority decides acceptance. Follow the source rules linked from each preset. There is no npm package.
+PortraitPass runs entirely on the local machine. No API key, external model, upload or server is needed for the core, CLI or MCP. The website is the product; the CLI and MCP server are thin extras for AI assistants working on local files. The browser adds human review, auto-framing, camera capture and an optional local segmentation mask. We check sizes and positions; the issuing authority decides acceptance. Follow the source rules linked from each document. There is no npm package.
 
 PortraitPass is an independent open-source project, not affiliated with or endorsed by any government or passport office.
+
+What is here: an open dataset of 49 documents (`DOCUMENTS`), measurement checks on every render, measure-only photo analysis, print sheets in two styles and orientations, and exact pixel and KB digital export. Any of the 35 dataset documents that can be made at home works as a preset id.
 
 From the repository root:
 
@@ -21,17 +23,22 @@ pnpm install
 
 Open the saved project in the browser studio to review it. `--embed` makes a CLI project portable; without it, supply `--input` again when rendering. MCP project handoffs always embed the source. Source bytes can contain identifying EXIF metadata; project files and original-mode outputs intentionally preserve original bytes. Save and share them intentionally. Prepared PNG/JPEG exports normalize orientation and strip source EXIF except generated print metadata.
 
-## Presets and coordinates
+## Presets, documents and coordinates
 
-Each preset in `presets --json` carries its dimensions, head and eye ranges where the source gives them (`headMinMm`/`headMaxMm`, `eyeMinMm`/`eyeMaxMm`, eye line measured up from the bottom edge), `backgroundEdit` (`forbidden`, `unspecified` or `allowed`), `notes`, `sourceUrl` and `checkedAt`. Read `notes` and show them to the person.
+There are two layers, and both work as `--preset` (CLI) or `presetId` (MCP, projects):
+
+1. **Six original presets**, listed by `presets --json` and `portraitpass_presets`. They stay authoritative for their ids, so saved projects keep working. Each carries its dimensions, head and eye ranges where the source gives them (`headMinMm`/`headMaxMm`, `eyeMinMm`/`eyeMaxMm`, eye line measured up from the bottom edge), `backgroundEdit` (`forbidden`, `unspecified` or `allowed`), `notes`, `sourceUrl` and `checkedAt`. Read `notes` and show them to the person.
+2. **The document dataset** (`DOCUMENTS`, see below). Any document with `diy` of `yes` or `digital-only` resolves through `getPreset` / `presetForId` in the catalog, so ids such as `us-visa`, `dv-lottery`, `in-oci`, `schengen-visa` or `cn-visa` work everywhere a preset id does, including `validateProject`. That is 35 of 49 ids. `presets` does not list them; read the dataset (below) for ids.
+
+The original six:
 
 - `us-passport`: printed 50.8 × 50.8 mm, crown-to-chin 25.4–34.925 mm (1–1⅜ inches), eyes 28.575–34.925 mm from the bottom. Someone else takes the photo, or use a tripod; selfies are not accepted. Background edits: `forbidden`.
 - `uk-passport`: printed 35 × 45 mm, crown-to-chin 29–34 mm. HM Passport Office asks for professionally printed photos that are not cut down from a larger picture; a photo lab or booth is the safer route, and for online applications use `uk-online`. Background edits: `forbidden`.
 - `au-passport`: printed 35 × 45 mm (one permitted size), crown-to-chin 32–36 mm. Print at a photo lab on dye-sublimation glossy paper of at least 200 gsm; inkjet prints are not accepted. Background edits: `forbidden`.
 - `general-id`: default 35 × 45 mm, optional custom dimensions and background mask. Background edits: `unspecified`. No claim about any authority's rules; check the receiving organisation.
-- `us-online`, `uk-online`: unchanged original bytes only; no crop, edit, sheet or alternate format. `us-online` accepts JPEG, PNG, HEIC and HEIF, 54 KB to 10 MB. `uk-online` is 50 KB to 10 MB, at least 600 × 750 px.
+- `us-online`, `uk-online`: unchanged original bytes only; no crop, edit, sheet or alternate format. `us-online` accepts JPEG, PNG, HEIC and HEIF, 54 KB to 10 MB. `uk-online` is 50 KB to 10 MB, at least 600 × 750 px. These are the same documents as the dataset ids `us-passport-online` and `uk-passport-online`, which also resolve.
 
-Not DIY, so not presets: Canadian passport (a commercial photographer is required) and German passport or ID card (digital photos through the authority or a certified provider since 1 May 2025). They are listed in `DOCUMENT_NOTICES`, exported from the core library (`src/core/presets.ts`) with a reason and source URL. The CLI and MCP tools do not expose them, so `presets` will not list these documents. If a person asks for one, tell them it is not DIY; do not substitute another preset.
+Not DIY, so no preset: 14 dataset documents have `diy: "no"` (a commercial photographer, a booth, a certified provider or the office takes the photo). Examples: Canadian passport, German passport and ID card, French passport, US naturalization. Asking for one of them fails with `INVALID_PRESET`. Tell the person why (`diyNote` and the source URL are in the dataset) and do not substitute another document. `DOCUMENT_NOTICES` in `src/core/presets.ts` is an older two-entry list of the same idea (Canada, Germany).
 
 All crop and landmark coordinates are in **oriented original pixels**. `crop` is `{x,y,width,height}`. `landmarks` is `{centerX,crownY,eyesY,chinY}`. To propose a crop from manually reviewed landmarks:
 
@@ -66,9 +73,48 @@ With `edge-to-edge` on A4 and Letter: 20 for `us-passport`, 36 for the 35 × 45 
 ./scripts/portraitpass digital --input /absolute/photo.jpg --preset general-id --width 200 --height 230 --min-kb 20 --max-kb 50 --output /absolute/exam.jpg --json
 ```
 
-`--width` and `--height` are required; `--min-kb`, `--max-kb`, `--kb-bytes` (`1000` or `1024`, default `1024`; use `1000` when the form means decimal KB), `--crop`, `--project` and `--overwrite` are optional. The crop must have the same shape as the target. With `--input` and no `--crop`, a centred crop of the target shape is used; with a project, a different shape fails with `ASPECT_MISMATCH` and a suggested crop. The photo is only ever scaled down: a crop with fewer pixels than the target fails with `LOW_RESOLUTION`. JPEG quality is searched between 0.3 and 0.95 in at most 8 encodes to land inside the range, keeping the highest quality that fits. If even the highest quality is under `--min-kb`, the file is padded with a JPEG comment segment up to the minimum (`padded: true`, `paddedBytes`); the pixels and quality are unchanged, which satisfies forms with a minimum size. If even the lowest quality is over `--max-kb`, the command fails with `FILE_SIZE_UNREACHABLE`; choose fewer pixels. Digital-original presets (`us-online`, `uk-online`) are never re-encoded (`ORIGINAL_ONLY`).
+`--width` and `--height` are required; `--min-kb`, `--max-kb`, `--kb-bytes` (`1000` or `1024`, default `1024`; use `1000` when the form means decimal KB), `--crop`, `--project` and `--overwrite` are optional. The crop must have the same shape as the target. With `--input` and no `--crop`, a centred crop of the target shape is used; with a project, a different shape fails with `ASPECT_MISMATCH` and a suggested crop. The photo is only ever scaled down: a crop with fewer pixels than the target fails with `LOW_RESOLUTION`. JPEG quality is searched between 0.3 and 0.95 in at most 8 encodes to land inside the range, keeping the highest quality that fits. If even the highest quality is under `--min-kb`, the file is padded with a JPEG comment segment up to the minimum (`padded: true`, `paddedBytes`); the pixels and quality are unchanged, which satisfies forms with a minimum size. If even the lowest quality is over `--max-kb`, the command fails with `FILE_SIZE_UNREACHABLE`; choose fewer pixels. Digital-original presets (`us-online`, `uk-online` and dataset documents with `originalOnly`) are never re-encoded (`ORIGINAL_ONLY`).
 
 The result carries `width`, `height`, `bytes`, `kb`, `kbBytes`, `minBytes`, `maxBytes`, `quality`, `padded`, `paddedBytes`, `encodes`, `backgroundReplaced`, `checks` (head, eyes and centre measurements, only when the pixel shape matches the preset shape), `fileChecks` (`pixels` and `filesize`) and `warnings`. The output must be a `.jpg` or `.jpeg` path.
+
+## The document dataset
+
+`DOCUMENTS` (exported from `src/core/index.ts`, defined in `src/core/documents.ts`, entries in `src/core/data/us.ts`, `south-asia.ts`, `europe.ts` and `world.ts`) is the open spec dataset. There is no CLI or MCP command that prints it yet; from TypeScript use `DOCUMENTS`, `getDocumentById`, `searchDocuments` and `popularDocuments`, or read the data files.
+
+```ts
+interface DocumentSpec {
+  id: string;            // "us-passport", "in-oci", "dv-lottery"
+  name: string; country: string; countryCode: string; // ISO alpha-2, or "EU"
+  kind: "passport" | "visa" | "id-card" | "residence" | "citizenship" | "lottery" | "exam-form" | "other";
+  diy: "yes" | "digital-only" | "no";
+  diyNote?: string;      // why not DIY, or the caveat (no selfies, lab print)
+  print?: { widthMm; heightMm; headMinMm?; headMaxMm?; eyeMinMm?; eyeMaxMm?; copies?; paper? };
+  digital?: { widthPx?; heightPx?; minWidthPx?; minHeightPx?; maxWidthPx?; maxHeightPx?; aspect?;
+              minKB?; maxKB?; kbBytes?: 1000 | 1024; formats: string[];
+              headRatioMin?; headRatioMax?; eyeRatioMin?; eyeRatioMax?; originalOnly?: boolean };
+  background: { colors: string[]; edit: "forbidden" | "unspecified" | "allowed" };
+  rules: string[];       // short plain facts: glasses, expression, recency
+  sources: { url; title; checkedAt: "YYYY-MM-DD"; kind: "primary" | "secondary" }[];
+  searchTerms: string[];
+}
+```
+
+How the studio and tools use an entry (`src/core/catalog.ts`):
+
+- `documentPreset(doc)` gives the frame: the print size when there is one, else the digital shape at 300 DPI. `undefined` for `diy: "no"`.
+- `documentDigitalTarget(doc)` gives the exact upload target `{widthPx, heightPx, minKB, maxKB, kbBytes, format: "jpeg"}` for 15 documents with a digital spec that accepts JPEG and is not `originalOnly`. The CLI `digital` command does not read it; pass the numbers as flags. For example `dv-lottery` is 600 × 600, at most 240 KB with `kbBytes` 1000; `in-upsc` is 600 × 600, 20 to 200 KB with 1024; `cn-visa` is 354 × 515, 40 to 120 KB with 1024.
+- `originalOnly` documents that can be made at home (`us-passport-online`, `uk-passport-online`, `pk-passport-online`) export the untouched file, never a crop. (`ca-pr` is also original-only but is `diy: "no"`, so it has no preset.)
+- `background.edit: "forbidden"` means the authority's rules say the photo must be unaltered. Background replacement is off by default there and warns.
+
+**Sourcing.** Every number comes from the issuing authority's own page or form, recorded in `sources` with its check date (all 2026-09-28 in this release). Several authority sites block automated fetches, so part of some entries was read from search-result text on the authority's domain, not the page itself. Those are logged in `notes/dataset/*.md` (gitignored) and need a human re-check. `kbBytes` follows the rule at the top of `src/core/data/us.ts`: use the source's own unit if it defines one; otherwise a max-only cap uses 1000, and a range with a minimum uses 1024.
+
+**Re-checking (monthly).** For each entry: open every source URL, compare size, head and eye ranges, background colour, KB and pixel limits, and the do-not-edit rule with the entry; if anything changed, edit the number, the `rules` line and `checkedAt` together; if a page is unreachable, keep the old date and say so in the evidence log; then run `pnpm test` (`tests/core/documents.test.ts` checks unique ids, https sources, dates, ordered ranges, `kbBytes` set whenever a limit exists, and banned claim words). Never write "compliant", "approved", "guaranteed" or "verified" in an entry.
+
+## Checks and photo analysis
+
+**Measurement checks** come back on `render`, `sheet` and `digital` as `checks`: `head`, `eyes`, `centre` and `resolution`, each `pass`, `fail` or `unknown`, with `valueMm`, `minMm`, `maxMm` or `ppi` and a plain message. They are measurements. A `fail` adds a line to `warnings`; the file is still written.
+
+**Photo analysis** is measure-only and never edits a photo. `analyzePhoto(input, expected?)` in `src/core/analysis.ts` takes RGBA pixels (plus an optional segmentation mask, face box and crop) and returns `PhotoCheck[]`: `background-even`, `background-shadow`, `background-colour`, `lighting-even`, `exposure`, `sharpness`. Each has `status` `pass`, `warn` or `unknown`, a `value` in percent or the unit the check describes, a `message` and a `tip`. In Node, `analyzeFile(path, {face?, crop?, expected?})` from `src/node/analysis.ts` reads a file; without a mask it reads the background from a border band, so pass `face` for the best result. The browser runs the same analysis with the on-device segmentation mask. It is not a CLI or MCP command yet. Present results as measurements with tips; expression, glasses and recency are for the person to check.
 
 ## JSON and file safety
 
@@ -86,7 +132,7 @@ Exit codes:
 
 Successful `render` and `sheet` results carry `checks`, a `warnings` array (empty when there is nothing to say) and, for prepared images and PDFs, `backgroundReplaced`. `checks` is the same measurement list the browser shows: `{id, status, valueMm?, minMm?, maxMm?, ppi?, message}` for `head`, `eyes`, `centre` and `resolution`, where `status` is `pass`, `fail` or `unknown` (no landmarks, or the document gives no range). Each failing head, eye or centre check also adds its message to `warnings`, and so does background replacement for a document whose rules forbid altering the photo; relay warnings to the person. No claim of document acceptance appears in output.
 
-Original modes (`us-online`, `uk-online`) fail with `ORIGINAL_NOT_ACCEPTED` (exit 3) when the file is outside the preset's limits (size, resolution or file type), matching the browser. The error carries an `issues` array of `{code, message}`; `inspect --preset` returns the same issues without failing. For `us-online`, HEIC and HEIF files pass through byte for byte: they are recognised from the file header and sized from it, not decoded, and they are refused for every other preset (`UNSUPPORTED_IMAGE`, exit 3, suggesting JPEG). That includes `project` and `crop`, so a print or general project is never written from a HEIC file.
+Original modes (`us-online`, `uk-online`, and dataset documents with `originalOnly`) fail with `ORIGINAL_NOT_ACCEPTED` (exit 3) when the file is outside the preset's limits (size, resolution or file type), matching the browser. The error carries an `issues` array of `{code, message}`; `inspect --preset` returns the same issues without failing. For `us-online`, HEIC and HEIF files pass through byte for byte: they are recognised from the file header and sized from it, not decoded, and they are refused for every other preset (`UNSUPPORTED_IMAGE`, exit 3, suggesting JPEG). That includes `project` and `crop`, so a print or general project is never written from a HEIC file.
 
 `render --project` with `--preset` is an error (`PRESET_PROJECT_CONFLICT`) when the preset differs from the project's own. Simplest is to omit `--preset` when using `--project`. `--paper`, `--dpi` and `--crop` given on the command line override the project's values; omitted ones keep the project's.
 
@@ -112,7 +158,7 @@ Outputs use exclusive creation by default. `--overwrite` must be explicit; sourc
 }
 ```
 
-`dataUrl`, `landmarks`, `sheetStyle` (`edge-to-edge` or `cut-marks`) and `sheetOrientation` (`auto`, `portrait` or `landscape`) are optional. `outputKind` is optional (`single` or `sheet`) and restores the browser preview/export intent; explicit CLI `render` and `sheet` commands choose their named output kind. Source width/height must match the decoded oriented image. `format` is `jpeg`, `png`, `pdf`, or `original` (only online presets). `source.mime` may also be `image/heic` or `image/heif`, but only in projects for original modes. General ID optionally adds `customSize: {widthMm,heightMm}` in the range 10–100 × 10–150 mm. Background replacement is available for print and general presets, never for original modes. For US, UK and Australia passports it is off by default because those authorities' rules forbid altering the photo, and outputs that use it carry the metadata note "Background replaced with PortraitPass". A mask is stored only while background replacement is on; when it is off the mask is dropped on validation. `landmarks` (head positions) are saved only when set. When enabled, the background requires `maskDataUrl`, a PNG data URL at exactly the source’s oriented dimensions with alpha 0 for background and 255 for foreground (fractional alpha supported). The interactive browser creates this mask; Node consumes it deterministically. `tolerance` is reserved editor metadata (0–100), not a second segmentation algorithm. Maximum mask data URL length is 20 million characters. Without a saved mask, Node background rendering fails with `MASK_REQUIRED`. Original modes reject an enabled background (`BACKGROUND_FORBIDDEN`).
+`presetId` is any preset id or DIY dataset document id. `dataUrl`, `landmarks`, `sheetStyle` (`edge-to-edge` or `cut-marks`) and `sheetOrientation` (`auto`, `portrait` or `landscape`) are optional. `outputKind` is optional (`single` or `sheet`) and restores the browser preview/export intent; explicit CLI `render` and `sheet` commands choose their named output kind. Source width/height must match the decoded oriented image. `format` is `jpeg`, `png`, `pdf`, or `original` (only online presets). `source.mime` may also be `image/heic` or `image/heif`, but only in projects for original modes. General ID optionally adds `customSize: {widthMm,heightMm}` in the range 10–100 × 10–150 mm. Background replacement is available for print and general presets, never for original modes. For US, UK and Australia passports it is off by default because those authorities' rules forbid altering the photo, and outputs that use it carry the metadata note "Background replaced with PortraitPass". A mask is stored only while background replacement is on; when it is off the mask is dropped on validation. `landmarks` (head positions) are saved only when set. When enabled, the background requires `maskDataUrl`, a PNG data URL at exactly the source’s oriented dimensions with alpha 0 for background and 255 for foreground (fractional alpha supported). The interactive browser creates this mask; Node consumes it deterministically. `tolerance` is reserved editor metadata (0–100), not a second segmentation algorithm. Maximum mask data URL length is 20 million characters. Without a saved mask, Node background rendering fails with `MASK_REQUIRED`. Original modes reject an enabled background (`BACKGROUND_FORBIDDEN`).
 
 ## MCP stdio
 
@@ -131,11 +177,11 @@ After `pnpm install`, use the executable wrapper below for a clean stdio transpo
 
 Tools expose JSON-schema input/output and structured `{ok,result,error}` envelopes:
 
-All path arguments (`input`, `projectPath`, `output`) must be absolute; relative paths fail with `PATH_NOT_ABSOLUTE`. Other rules match the CLI: format inferred from the output extension (`FORMAT_EXTENSION_MISMATCH`), original modes fail with `ORIGINAL_NOT_ACCEPTED` and its `issues`, a `presetId` that differs from `projectPath`'s preset is `PRESET_PROJECT_CONFLICT`, and the source and project files are never overwritten. `overwrite` and `paperId` have no schema default: omit them and the project's value (or `false`, or `4x6` for new projects) applies. Results carry `checks`, `warnings` and `backgroundReplaced` as described above. Error results set `isError` and use the same codes as the CLI exit table; `DOCUMENT_NOTICES` is not exposed.
+All path arguments (`input`, `projectPath`, `output`) must be absolute; relative paths fail with `PATH_NOT_ABSOLUTE`. Other rules match the CLI: format inferred from the output extension (`FORMAT_EXTENSION_MISMATCH`), original modes fail with `ORIGINAL_NOT_ACCEPTED` and its `issues`, a `presetId` that differs from `projectPath`'s preset is `PRESET_PROJECT_CONFLICT`, and the source and project files are never overwritten. `overwrite` and `paperId` have no schema default: omit them and the project's value (or `false`, or `4x6` for new projects) applies. Results carry `checks`, `warnings` and `backgroundReplaced` as described above. Error results set `isError` and use the same codes as the CLI exit table.
 
 | Tool | Purpose | Key arguments |
 | --- | --- | --- |
-| `portraitpass_presets` | List presets, papers, sources and notes | none |
+| `portraitpass_presets` | List the six original presets and papers, with sources and notes (dataset ids also work as `presetId`) | none |
 | `portraitpass_inspect` | Decode source metadata, optional original guidance | `input`, optional `presetId` |
 | `portraitpass_crop` | Propose centered/manual-landmark crop | `input`, `presetId`, optional `landmarks` |
 | `portraitpass_layout` | Pure sheet geometry, placements and cut marks or edge guides | `presetId`, `paperId`, optional `dpi`, `sheetStyle`, `sheetOrientation` |

@@ -7,6 +7,8 @@ import {
   type Crop,
   type Landmarks,
   type Preset,
+  type SheetOrientation,
+  type SheetStyle,
 } from "../../core/index";
 import { renderPreview, type LoadedPhoto } from "../../browser/engine";
 
@@ -19,9 +21,13 @@ export function zoomOf(crop: Crop, base: Crop | null) {
 }
 
 /** Sheet layout for the preview paper, or undefined when the photo does not fit on it. */
-export function previewSheet(preset: Preset, paperId: string) {
+export function previewSheet(
+  preset: Preset,
+  paperId: string,
+  options: { style?: SheetStyle; orientation?: SheetOrientation } = {},
+) {
   try {
-    return layoutSheet(preset, paperId, 300);
+    return layoutSheet(preset, paperId, 300, options);
   } catch {
     return undefined;
   }
@@ -110,6 +116,9 @@ export interface CanvasProps {
   background?: string;
   view: StageView;
   paperId: string;
+  /** Sheet layout, as chosen in the download panel. */
+  sheetStyle?: SheetStyle;
+  sheetOrientation?: SheetOrientation;
   /** Dragging, wheel, pinch and arrow keys move the crop. */
   interactive: boolean;
   /** The widest crop of the document's shape; sets the zoom range. */
@@ -133,12 +142,17 @@ export function Canvas(props: CanvasProps) {
     background,
     view,
     paperId,
+    sheetStyle,
+    sheetOrientation,
     interactive,
   } = props;
   const original = preset.mode === "original";
   const sheet = useMemo(
-    () => (view === "sheet" && !original ? previewSheet(preset, paperId) : undefined),
-    [view, original, preset, paperId],
+    () =>
+      view === "sheet" && !original
+        ? previewSheet(preset, paperId, { style: sheetStyle, orientation: sheetOrientation })
+        : undefined,
+    [view, original, preset, paperId, sheetStyle, sheetOrientation],
   );
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -163,6 +177,8 @@ export function Canvas(props: CanvasProps) {
     try {
       renderPreview(canvasRef.current, photo, preset, crop, {
         paperId,
+        sheetStyle,
+        sheetOrientation,
         sheet: showSheet,
         guides: guides && !showSheet && !original,
         background: original ? undefined : background,
@@ -173,7 +189,7 @@ export function Canvas(props: CanvasProps) {
     }
     // props.onError is stable enough; it only reports.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [photo, preset, crop, paperId, showSheet, guides, background, original, landmarks, shown.w]);
+  }, [photo, preset, crop, paperId, sheetStyle, sheetOrientation, showSheet, guides, background, original, landmarks, shown.w]);
 
   // Everything the pointer, wheel and key handlers need, without rebinding them on every render.
   const live = useRef(props);

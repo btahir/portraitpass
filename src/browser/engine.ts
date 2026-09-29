@@ -341,6 +341,8 @@ function drawGuides(
   const lu = u * Math.max(1, cssScale),
     placed: ChipBox[] = [],
     { width: W, height: H } = size,
+    // On a small preview the full labels would cover the face; the short ones keep the numbers.
+    compact = W / lu < 360,
     perMm = H / preset.heightMm,
     bands = guideBands(preset);
   ctx.save();
@@ -355,7 +357,9 @@ function drawGuides(
     guideLine(ctx, SAGE, u, 0, bottom, W, bottom);
     chip(
       ctx,
-      `Eyes ${mmText(minMm)}–${mmText(maxMm)} mm from bottom`,
+      compact
+        ? `Eyes ${mmText(minMm)}–${mmText(maxMm)} mm`
+        : `Eyes ${mmText(minMm)}–${mmText(maxMm)} mm from bottom`,
       6 * u,
       top - 20 * lu < 0 ? bottom + 2 * u : top - 20 * lu,
       lu,
@@ -374,7 +378,9 @@ function drawGuides(
     guideLine(ctx, PERSIMMON, u, 0, lower, W, lower);
     chip(
       ctx,
-      `Crown zone · head ${mmText(bands.head.minMm)}–${mmText(bands.head.maxMm)} mm`,
+      compact
+        ? `Head ${mmText(bands.head.minMm)}–${mmText(bands.head.maxMm)} mm`
+        : `Crown zone · head ${mmText(bands.head.minMm)}–${mmText(bands.head.maxMm)} mm`,
       6 * u,
       lower + 2 * u,
       lu,
@@ -1084,8 +1090,20 @@ export async function autoCrop(photo: LoadedPhoto, preset: Preset) {
   return {
     crop: cropFromLandmarks(photo.width, photo.height, preset, landmarks),
     landmarks,
+    /** The detector's face box (forehead to chin) in source pixels. Kept in memory only, never saved. */
+    face: {
+      x: b.originX,
+      y: b.originY,
+      width: b.width,
+      height: b.height,
+    },
     message: "Position suggested. Check the crown and chin guides yourself.",
   };
+}
+
+/** The cached segmentation mask for this photo (alpha = person probability), if segmentation has run. */
+export function getBackgroundMask(photo: LoadedPhoto): HTMLCanvasElement | undefined {
+  return masks.get(photo.image);
 }
 
 let segmentPromise:

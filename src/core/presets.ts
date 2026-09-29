@@ -4,6 +4,7 @@ import {
   type Preset,
   type Paper,
 } from "./types.js";
+import { presetForId } from "./catalog.js";
 const checkedAt = "2026-09-28";
 export const PRESETS: Preset[] = [
   {
@@ -146,8 +147,13 @@ export const PAPERS: Paper[] = [
   { id: "a4", name: "A4", widthMm: 210, heightMm: 297 },
   { id: "letter", name: "US Letter", widthMm: 215.9, heightMm: 279.4 },
 ];
+/**
+ * Legacy presets stay authoritative for their ids (saved projects, CLI); any other DIY document id
+ * from the dataset resolves through the catalog. The import cycle with catalog.ts is safe: both
+ * modules only touch each other's exports inside functions, never while loading.
+ */
 export function getPreset(id: string): Preset {
-  const item = PRESETS.find((p) => p.id === id);
+  const item = PRESETS.find((p) => p.id === id) ?? presetForId(id);
   if (!item)
     throw new PortraitError("INVALID_PRESET", "Unknown document preset.");
   return { ...item };

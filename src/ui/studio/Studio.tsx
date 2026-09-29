@@ -20,7 +20,6 @@ import {
   X,
 } from "lucide-react";
 import {
-  PRESETS,
   DOCUMENTS,
   clampCrop,
   cropFromLandmarks,
@@ -34,12 +33,13 @@ import {
   type Landmarks,
   type Preset,
 } from "../../core/index";
-import type { PhotoCheck } from "../../core/analysis";
+import type { AnalysisBox, PhotoCheck } from "../../core/analysis";
 import {
   HEIC_PRINT_MESSAGE,
   HEIC_UNSUPPORTED_MESSAGE,
   autoCrop,
   downloadBlob,
+  getBackgroundMask,
   isHeifPhoto,
   loadDemo,
   loadPhoto,
@@ -58,15 +58,20 @@ import { fileChecks } from "../checks";
 import { AdjustPrecisely } from "./AdjustPrecisely";
 import { BackgroundControls } from "./BackgroundControls";
 import { type StageView, zoomOf } from "./Canvas";
-import { ChecksPanel, summarize } from "./ChecksPanel";
+import { CheckDetails, Verdict, YouCheck, summarize } from "./ChecksPanel";
 import { DocumentCard } from "./DocumentCard";
 import { Intake as IntakePanel } from "./Intake";
-import { OutputPanel } from "./OutputPanel";
+import {
+  DEFAULT_OUTPUT,
+  OutputPanel,
+  defaultStyle,
+  effectiveTab,
+  type OutputState,
+} from "./OutputPanel";
 import { Stage, type FrameNote } from "./Stage";
 import { StepsRail } from "./StepsRail";
 import type { Intake } from "./handoff";
 import {
-  faceBoxFromLandmarks,
   faceNoticeSeen,
   messageOf,
   orderLandmarks,
@@ -123,7 +128,15 @@ export default function Studio({ docId, intake, onIntakeDone, onDocChange }: Stu
   const [landmarks, setLandmarks] = useState<Landmarks | null>(null);
   // False while the head positions are only rough defaults nobody has set.
   const [landmarksSet, setLandmarksSet] = useState(false);
-  const [faceBox, setFaceBox] = useState<ReturnType<typeof faceBoxFromLandmarks> | undefined>();
+  // What the detector found, in source pixels, and the segmentation mask once it has run. Memory only.
+  const [faceBox, setFaceBox] = useState<AnalysisBox | undefined>();
+  const [mask, setMask] = useState<HTMLCanvasElement | undefined>();
+  const [output, setOutput] = useState<OutputState>(DEFAULT_OUTPUT);
+  const outputTab = effectiveTab(doc, preset, output.tab);
+  const patchOutput = useCallback((patch: Partial<OutputState>) => {
+    setOutput((o) => ({ ...o, ...patch }));
+    setExported(false);
+  }, []);
   const [view, setView] = useState<StageView>("frame");
   const [guides, setGuides] = useState(true);
   const [background, setBackground] = useState<string | undefined>();
@@ -249,6 +262,7 @@ export default function Studio({ docId, intake, onIntakeDone, onDocChange }: Stu
       );
       setLandmarksSet(!!opts.landmarks);
       setFaceBox(undefined);
+      setMask(getBackgroundMask(next));
       setPhotoChecks([]);
       setBackground(undefined);
       setView("frame");
@@ -275,8 +289,8 @@ export default function Studio({ docId, intake, onIntakeDone, onDocChange }: Stu
         homeCropRef.current = result.crop;
         setLandmarks(orderLandmarks(result.landmarks, target.height));
         setLandmarksSet(true);
-        const found = (result as { face?: typeof faceBox }).face;
-        setFaceBox(found ?? faceBoxFromLandmarks(result.landmarks));
+        setFaceBox(result.face);
+        setMask(getBackgroundMask(target));
         setFrameNote({ tone: "ok", text: "Auto-framed. Check the lines." });
       } catch (e) {
         if (version !== versionRef.current) return;
@@ -383,7 +397,26 @@ export default function Studio({ docId, intake, onIntakeDone, onDocChange }: Stu
         setCustomSize({ widthMm: size.widthMm, heightMm: size.heightMm });
         acceptPhoto(result.photo, p, { crop: result.crop, landmarks: result.landmarks });
         onDocChange(restored.doc?.id ?? result.presetId);
-        setView(result.sheet && p.mode !== "original" ? "sheet" : "frame");
+        const sheet = result.sheet && p.mode !== "original";
+        const snapDpi = (dpi: number) => (dpi >= 450 ? 600 : 300);
+        setOutput({
+          ...DEFAULT_OUTPUT,
+          tab: sheet ? "sheet" : "single",
+          paperId: result.paperId,
+          style: result.sheetStyle ?? defaultStyle(result.paperId),
+          orientation: result.sheetOrientation ?? "auto",
+          ...(sheet
+            ? {
+                sheetFormat: result.format === "pdf" ? "pdf" : "jpeg",
+                sheetDpi: snapDpi(result.dpi),
+              }
+            : {
+                singleFormat:
+                  result.format === "png" || result.format === "pdf" ? result.format : "jpeg",
+                singleDpi: snapDpi(result.dpi),
+              }),
+        });
+        setView(sheet ? "sheet" : "frame");
         setBackground(p.mode === "original" ? undefined : result.background);
         setStatus("Project restored. Your photo stays on this device.");
       } catch (e) {
@@ -468,6 +501,7 @@ export default function Studio({ docId, intake, onIntakeDone, onDocChange }: Stu
           analyzeLoadedPhoto(photo.image, photo.width, photo.height, {
             crop,
             face: faceBox,
+            mask,
             expected: backgroundColours?.length ? { backgroundColors: backgroundColours } : undefined,
           }),
         );
@@ -476,7 +510,7 @@ export default function Studio({ docId, intake, onIntakeDone, onDocChange }: Stu
       }
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [photo, crop, faceBox, isOriginal, backgroundColours]);
+  }, [photo, crop, faceBox, mask, isOriginal, backgroundColours]);
 
   const measure = useMemo(
     () =>
@@ -538,6 +572,7 @@ export default function Studio({ docId, intake, onIntakeDone, onDocChange }: Stu
     setLandmarks(null);
     setLandmarksSet(false);
     setFaceBox(undefined);
+    setMask(undefined);
     setPhotoChecks([]);
     setBackground(undefined);
     clearHistory();
@@ -593,12 +628,21 @@ export default function Studio({ docId, intake, onIntakeDone, onDocChange }: Stu
     setBusy("Saving your portable project…");
     setError("");
     try {
+      const sheet = !isOriginal && outputTab === "sheet";
       const blob = await saveProject(photo, projectPreset(preset), crop, {
-        paperId: "4x6",
+        paperId: output.paperId,
         background,
-        format: "jpeg",
-        dpi: 300,
-        sheet: view === "sheet",
+        format: isOriginal
+          ? "jpeg"
+          : outputTab === "sheet"
+            ? output.sheetFormat
+            : outputTab === "digital"
+              ? "jpeg"
+              : output.singleFormat,
+        dpi: sheet ? output.sheetDpi : output.singleDpi,
+        sheet,
+        sheetStyle: output.style,
+        sheetOrientation: output.orientation,
         // Only head positions the user set (or face assist found) are saved, never the rough defaults.
         landmarks: landmarksSet && !isOriginal && landmarks ? landmarks : undefined,
         customSize:
@@ -615,7 +659,6 @@ export default function Studio({ docId, intake, onIntakeDone, onDocChange }: Stu
       if (operation === versionRef.current) setBusy("");
     }
   };
-  const canSave = PRESETS.some((p) => p.id === projectPreset(preset).id);
 
   const changeBackground = async (colour: string | undefined) => {
     if (!colour) {
@@ -630,6 +673,7 @@ export default function Studio({ docId, intake, onIntakeDone, onDocChange }: Stu
     try {
       await prepareBackground(photo);
       if (operation !== versionRef.current) return;
+      setMask(getBackgroundMask(photo));
       setBackground(colour);
       setExported(false);
     } catch (e) {
@@ -804,7 +848,7 @@ export default function Studio({ docId, intake, onIntakeDone, onDocChange }: Stu
         <p className="studio-sub">Frame it against the size guides. Everything runs on this device.</p>
       </div>
       <div className="studio-grid" aria-label="Photo preparation studio" role="region">
-        <div className="col col-left">
+        <div className="studio-top">
           <StepsRail current={step} />
           <DocumentCard
             doc={doc}
@@ -821,7 +865,96 @@ export default function Studio({ docId, intake, onIntakeDone, onDocChange }: Stu
               documents, use a JPEG.
             </p>
           )}
-          <div className="tools">
+        </div>
+        <div className="studio-stage">
+          {photo && crop ? (
+            <Stage
+              photo={photo}
+              preset={preset}
+              crop={crop}
+              landmarks={landmarksSet && landmarks ? landmarks : undefined}
+              guides={guides}
+              background={isOriginal ? undefined : background}
+              view={view}
+              paperId={output.paperId}
+              sheetStyle={output.style}
+              sheetOrientation={output.orientation}
+              baseCrop={baseCrop}
+              zoom={zoom}
+              busy={!!busy}
+              canUndo={history.length > 0 || gestureOpen}
+              frameNote={frameNote}
+              noticePending={noticePending}
+              onView={setView}
+              onGuides={setGuides}
+              onAutoFrame={autoFrame}
+              onConfirmNotice={confirmNotice}
+              onSkipNotice={skipNotice}
+              onUndo={undo}
+              onReset={reset}
+              onZoom={setZoom}
+              onLive={(next) => liveCrop(clamp(next))}
+              onCommit={commitGesture}
+              onSettle={settleSoon}
+              onError={setError}
+            />
+          ) : (
+            <IntakePanel
+              documentName={name}
+              canCamera={canCamera}
+              dragging={dragging}
+              busy={!!busy}
+              onChoose={() => fileRef.current?.click()}
+              onCamera={() => setCameraOpen(true)}
+              onSample={() => void loadSample()}
+              onOpenProject={() => projectRef.current?.click()}
+            />
+          )}
+        </div>
+        <div className="studio-side">
+          {photo && <Verdict summary={summary} />}
+          {photo && crop && (
+            <div className="output-slot">
+              <OutputPanel
+                doc={doc}
+                preset={preset}
+                photo={photo}
+                crop={crop}
+                background={isOriginal ? undefined : background}
+                checksSummary={{ failing: summary.failing, unknown: summary.unknown }}
+                state={output}
+                onState={patchOutput}
+                onExported={() => {
+                  setExported(true);
+                  setStatus("");
+                }}
+              />
+              {exported && (
+                <div className="export-success" role="status">
+                  <strong>
+                    <Check size={14} aria-hidden="true" /> Your download is ready.
+                  </strong>
+                  <span>PortraitPass is free and has no ads. Tips keep it going.</span>
+                  <a className="support-inline" href={SUPPORT_URL}>
+                    Leave a tip <Heart size={13} aria-hidden="true" />
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
+          {photo && (
+            <CheckDetails
+              preset={preset}
+              measure={measure}
+              photoChecks={photoChecks}
+              file={file}
+              summary={summary}
+            />
+          )}
+          <YouCheck doc={doc} hasPhoto={!!photo} />
+        </div>
+        {photo && (
+          <div className="tools studio-tools">
             {photo && (
               <section className="tool-section" aria-label="Photo">
                 <h3>Photo</h3>
@@ -834,11 +967,9 @@ export default function Studio({ docId, intake, onIntakeDone, onDocChange }: Stu
                       <Camera size={14} aria-hidden="true" /> Take photo
                     </button>
                   )}
-                  {canSave && (
-                    <button className="secondary small-button" disabled={!!busy} onClick={() => void save()}>
-                      <FileDown size={14} aria-hidden="true" /> Save project
-                    </button>
-                  )}
+                  <button className="secondary small-button" disabled={!!busy} onClick={() => void save()}>
+                    <FileDown size={14} aria-hidden="true" /> Save project
+                  </button>
                   <button className="secondary small-button" disabled={!!busy} onClick={() => projectRef.current?.click()}>
                     <FolderOpen size={14} aria-hidden="true" /> Open project
                   </button>
@@ -882,90 +1013,7 @@ export default function Studio({ docId, intake, onIntakeDone, onDocChange }: Stu
               </div>
             )}
           </div>
-        </div>
-
-        <div className="col col-center">
-          {photo && crop ? (
-            <Stage
-              photo={photo}
-              preset={preset}
-              crop={crop}
-              landmarks={landmarksSet && landmarks ? landmarks : undefined}
-              guides={guides}
-              background={isOriginal ? undefined : background}
-              view={view}
-              paperId="4x6"
-              baseCrop={baseCrop}
-              zoom={zoom}
-              busy={!!busy}
-              canUndo={history.length > 0 || gestureOpen}
-              frameNote={frameNote}
-              noticePending={noticePending}
-              onView={setView}
-              onGuides={setGuides}
-              onAutoFrame={autoFrame}
-              onConfirmNotice={confirmNotice}
-              onSkipNotice={skipNotice}
-              onUndo={undo}
-              onReset={reset}
-              onZoom={setZoom}
-              onLive={(next) => liveCrop(clamp(next))}
-              onCommit={commitGesture}
-              onSettle={settleSoon}
-              onError={setError}
-            />
-          ) : (
-            <IntakePanel
-              documentName={name}
-              canCamera={canCamera}
-              dragging={dragging}
-              busy={!!busy}
-              onChoose={() => fileRef.current?.click()}
-              onCamera={() => setCameraOpen(true)}
-              onSample={() => void loadSample()}
-              onOpenProject={() => projectRef.current?.click()}
-            />
-          )}
-        </div>
-
-        <div className="col col-right">
-          <ChecksPanel
-            doc={doc}
-            preset={preset}
-            hasPhoto={!!photo}
-            measure={measure}
-            photoChecks={photoChecks}
-            file={file}
-            summary={summary}
-          />
-          {photo && crop && (
-            <div className="output-slot">
-              <OutputPanel
-                doc={doc}
-                preset={preset}
-                photo={photo}
-                crop={crop}
-                background={isOriginal ? undefined : background}
-                checksSummary={{ failing: summary.failing, unknown: summary.unknown }}
-                onExported={() => {
-                  setExported(true);
-                  setStatus("");
-                }}
-              />
-              {exported && (
-                <div className="export-success" role="status">
-                  <strong>
-                    <Check size={14} aria-hidden="true" /> Your download is ready.
-                  </strong>
-                  <span>PortraitPass is free and has no ads. Tips keep it going.</span>
-                  <a className="support-inline" href={SUPPORT_URL}>
-                    Leave a tip <Heart size={13} aria-hidden="true" />
-                  </a>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        )}
       </div>
       {cameraOpen && (
         <Suspense fallback={null}>
