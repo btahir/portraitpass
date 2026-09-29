@@ -340,7 +340,7 @@ test('a download shows the tips ask, and Tips never unlock anything', async ({ p
   const pending = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Download print sheet', exact: true }).click();
   await downloadBytes(await pending);
-  await expect(page.getByRole('link', { name: /Leave a tip/ })).toHaveAttribute('href', '/support/');
+  await expect(page.getByRole('link', { name: /Leave a tip/ })).toHaveAttribute('href', 'https://shotcandy.vercel.app/support/');
   await expect(page.getByText(/donat/i)).toHaveCount(0);
 });
 

@@ -22,7 +22,7 @@ test.describe('static pages', () => {
     });
     expect(paths.length).toBeGreaterThanOrEqual(DOCUMENTS.length + 10);
     expect(new Set(paths).size).toBe(paths.length);
-    for (const path of ['/', '/studio/', '/about/', '/support/', '/privacy/', '/terms/', '/accessibility/', '/documents/',
+    for (const path of ['/', '/studio/', '/about/', '/privacy/', '/terms/', '/accessibility/', '/documents/',
       '/us-passport-photo/', '/uk-passport-photo/', '/35x45-photo/', '/passport-photo-print-sheet/',
       '/2x2-photo/', '/600x600-photo/', '/photo-under-50kb/', '/print-passport-photos/']) {
       expect(paths, path).toContain(path);

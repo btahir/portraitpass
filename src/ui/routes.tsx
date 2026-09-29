@@ -17,7 +17,7 @@ import { loadedTranslations } from "../i18n/registry";
 import { strings } from "../i18n/strings";
 import { DocumentPage } from "./pages/DocumentPage";
 import { DocumentsIndexPage } from "./pages/DocumentsIndex";
-import { AboutPage, SupportPage } from "./pages/Info";
+import { AboutPage } from "./pages/Info";
 import { AccessibilityPage, PrivacyPage, TermsPage } from "./pages/Legal";
 import { sizePages, type PageDef } from "./pages/SizePages";
 import { documentFaq, documentMeta, docPath, type Faq } from "./pages/content";
@@ -219,13 +219,6 @@ function entries(): Map<string, Entry> {
       "An independent open-source passport photo tool. Your photos stay on your device. Learn how it works, where the numbers come from and what it cannot promise.",
       "About",
       () => <AboutPage />,
-    ),
-    fixed(
-      "/support/",
-      "Support PortraitPass",
-      "Tips keep PortraitPass free, private and open source. Optional one-time or monthly tips; they never unlock features or touch your photos.",
-      "Support",
-      () => <SupportPage />,
     ),
     fixed(
       "/privacy/",
